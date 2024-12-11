@@ -1,0 +1,35 @@
+{
+    "name": "touchkio",
+    "description": "Home Assistant Touch Kiosk",
+    "author": "leukipp",
+    "version": "1.0.0",
+    "license": "MIT",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron . --web-url=https://demo.home-assistant.io",
+        "build": "electron-builder --linux AppImage --arm64"
+    },
+    "build": {
+        "productName": "touchkio",
+        "linux": {
+            "target": [
+                {
+                    "target": "AppImage",
+                    "arch": [
+                        "arm64"
+                    ]
+                }
+            ],
+            "icon": "img/icon.png",
+            "category": "Network"
+        },
+        "artifactName": "${productName}-${version}-${arch}.AppImage"
+    },
+    "devDependencies": {
+        "electron": "^33.2.1",
+        "electron-builder": "^25.1.8"
+    },
+    "dependencies": {
+        "mqtt": "^5.10.3"
+    }
+}
