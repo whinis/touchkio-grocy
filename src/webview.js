@@ -24,14 +24,16 @@ const init = (args) => {
   const theme = args.web_theme ? args.web_theme : "dark";
   const zoom = args.web_zoom ? parseFloat(args.web_zoom) : 1.25;
 
+  // Set app theme and name
+  nativeTheme.themeSource = theme;
+  app.setName("TouchKio");
+
   // Init global root window
   WEBVIEW.window = new BaseWindow({
     icon: path.join(__dirname, "..", "img", "icon.png"),
   });
   WEBVIEW.window.setMenuBarVisibility(false);
   WEBVIEW.window.setFullScreen(true);
-  nativeTheme.themeSource = theme;
-  // WEBVIEW.window.minimize();
 
   // Init global main webview
   WEBVIEW.view = new WebContentsView();
