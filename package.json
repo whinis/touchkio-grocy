@@ -4,7 +4,7 @@
     "author": "leukipp",
     "version": "0.0.1",
     "license": "MIT",
-    "main": "main.js",
+    "main": "index.js",
     "scripts": {
         "start": "electron . --web-url=https://demo.home-assistant.io",
         "build": "electron-forge make"
@@ -26,8 +26,11 @@
                     "name": "@electron-forge/maker-deb",
                     "config": {
                         "options": {
+                            "productName": "TouchKio",
                             "icon": "img/icon.png",
-                            "category": "Network"
+                            "categories": [
+                                "Network"
+                            ]
                         }
                     }
                 }
