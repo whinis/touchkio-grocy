@@ -28,7 +28,10 @@ app.whenReady().then(async () => {
   } else if (!argsProvided && argsFileExists) {
     args = JSON.parse(fs.readFileSync(argsFilePath));
   }
-  console.log(JSON.stringify(args, null, 2));
+
+  // Show used arguments
+  const json = JSON.stringify(args, null, 2);
+  console.log(`Arguments: ${json}`);
 
   // Chained init functions
   const chained = [webview.init, hardware.init, integration.init];
