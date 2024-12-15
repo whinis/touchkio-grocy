@@ -32,23 +32,28 @@ echo -e "\nCreating systemd user service..."
 SERVICE_FILE="$HOME/.config/systemd/user/touchkio.service"
 mkdir -p "$(dirname "$SERVICE_FILE")" || { echo "Failed to create directory for $SERVICE_FILE"; exit 1; }
 
-cat << EOF > "$SERVICE_FILE"
+bash -c "cat << EOF > \"$SERVICE_FILE\"
 [Unit]
 Description=TouchKio
 After=graphical.target
 
 [Service]
-
 ExecStart=/usr/bin/touchkio
 Restart=on-failure
 RestartSec=5s 
 
 [Install]
 WantedBy=default.target
-EOF
+EOF"
 
 systemctl --user enable "$(basename "$SERVICE_FILE")" || { echo "Failed to enable service $SERVICE_FILE"; exit 1; }
-systemctl --user start "$(basename "$SERVICE_FILE")" || { echo "Failed to start service $SERVICE_FILE"; exit 1; }
+
+# Create the udev rule for backlight
+echo -e "\nCreating udev rule for backlight..."
+
+sudo bash -c 'cat << EOF > /etc/udev/rules.d/backlight-permissions.rules
+SUBSYSTEM=="backlight", KERNEL=="10-0045", RUN+="/bin/chmod 666 /sys/class/backlight/%k/bl_power /sys/class/backlight/%k/brightness"
+EOF'
 
 # Start the setup mode
 echo ""
