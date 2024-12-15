@@ -54,6 +54,6 @@ systemctl --user start "$(basename "$SERVICE_FILE")" || { echo "Failed to start 
 echo ""
 read -p "Start touchkio setup? (Y/n) " answer
 if [[ ${answer:-y} == [Yy]* ]]; then
-    echo -e "\nStarting /usr/bin/touchkio --setup"
+    echo "/usr/bin/touchkio --setup"
     /usr/bin/touchkio --setup
 fi
