@@ -18,34 +18,43 @@ global.HARDWARE = global.HARDWARE || {
  * @param {Object} args - The command-line arguments to customize the initialization process.
  * @returns {boolean} Returns true if the initialization was successful.
  */
-const init = (args) => {
-  const model = getModel();
-  const valid = model && model.includes("Raspberry Pi 5");
-
-  // Check supported hardware
-  if (valid) {
-    console.log("\nModel:", getModel());
-    console.log("Serial Number:", getSerialNumber());
-    console.log("Host Name:", getHostName());
-    console.log("Up Time:", getUpTime());
-    console.log("Memory Size:", getMemorySize());
-    console.log("Memory Usage:", getMemoryUsage());
-    console.log("Processor Usage:", getProcessorUsage());
-    console.log("Processor Temperature:", getProcessorTemperature());
-    console.log("Display Status:", getDisplayStatus());
-    console.log("Display Brightness:", getDisplayBrightness(), "\n");
-
-    // Init globals
-    HARDWARE.initialized = true;
-    HARDWARE.status = "valid";
-
-    // Check for display changes
-    setInterval(update, 500);
-  } else {
-    console.warn(`Device ${model} not supported`);
+const init = async (args) => {
+  if (!args.mqtt_url) {
+    return false;
   }
 
-  return valid;
+  // Check supported hardware
+  if (!hardwareExists()) {
+    console.warn("Hardware not supported");
+    return false;
+  }
+
+  // Check supported model
+  const model = getModel();
+  if (!model || !model.includes("Raspberry Pi 5")) {
+    console.warn(`Device ${model} not supported`);
+    return false;
+  }
+
+  console.log("\nModel:", getModel());
+  console.log("Serial Number:", getSerialNumber());
+  console.log("Host Name:", getHostName());
+  console.log("Up Time:", getUpTime());
+  console.log("Memory Size:", getMemorySize());
+  console.log("Memory Usage:", getMemoryUsage());
+  console.log("Processor Usage:", getProcessorUsage());
+  console.log("Processor Temperature:", getProcessorTemperature());
+  console.log("Display Status:", getDisplayStatus());
+  console.log("Display Brightness:", getDisplayBrightness(), "\n");
+
+  // Init globals
+  HARDWARE.initialized = true;
+  HARDWARE.status = "valid";
+
+  // Check for display changes
+  setInterval(update, 500);
+
+  return true;
 };
 
 /**
@@ -76,6 +85,21 @@ const update = () => {
       notifier();
     });
   }
+};
+
+/**
+ * Verifies hardware compatibility by checking the presence of necessary sys files.
+ *
+ * @returns {bool} Returns true if all files exists.
+ */
+const hardwareExists = () => {
+  const files = [
+    "/sys/firmware/devicetree/base/model",
+    "/sys/firmware/devicetree/base/serial-number",
+    "/sys/class/backlight/10-0045/brightness",
+    "/sys/class/backlight/10-0045/bl_power",
+  ];
+  return files.every((file) => fs.existsSync(file));
 };
 
 /**
@@ -192,8 +216,8 @@ const getDisplayStatus = () => {
  */
 const setDisplayStatus = (status, callback = null) => {
   if (status !== "ON" && status !== "OFF") {
-    console.error("Status must be 'ON' or 'OFF'.");
-    if (typeof callback === "function") callback(null, "Invalid status.");
+    console.error("Status must be 'ON' or 'OFF'");
+    if (typeof callback === "function") callback(null, "Invalid status");
     return;
   }
   const args = status === "ON" ? ["--on", "*"] : ["--off", "*"];
@@ -240,8 +264,8 @@ const getDisplayBrightness = () => {
  */
 const setDisplayBrightness = (brightness, callback = null) => {
   if (typeof brightness !== "number" || brightness < 1 || brightness > 100) {
-    console.error("Brightness must be a number between 1 and 100.");
-    if (typeof callback === "function") callback(null, "Invalid brightness.");
+    console.error("Brightness must be a number between 1 and 100");
+    if (typeof callback === "function") callback(null, "Invalid brightness");
     return;
   }
   const value = Math.max(1, Math.min(Math.round((brightness / 100) * 31), 31));

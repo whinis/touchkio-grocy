@@ -13,7 +13,7 @@ global.INTEGRATION = global.INTEGRATION || {
  * @param {Object} args - The command-line arguments to customize the initialization process.
  * @returns {boolean} Returns true if the initialization was successful.
  */
-const init = (args) => {
+const init = async (args) => {
   if (!args.mqtt_url) {
     return false;
   }
@@ -196,7 +196,7 @@ const initRefresh = (client) => {
     )
     .on("message", (topic, message) => {
       if (topic === `${root}/execute`) {
-        console.log("Refresh webview...");
+        console.log("Refreshing webview...");
         hardware.setDisplayStatus("ON");
         WEBVIEW.view.webContents.reloadIgnoringCache();
       }

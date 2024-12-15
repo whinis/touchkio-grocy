@@ -15,9 +15,9 @@ global.WEBVIEW = global.WEBVIEW || {
  * @param {Object} args - The command-line arguments to customize the initialization process.
  * @returns {boolean} Returns true if the initialization was successful.
  */
-const init = (args) => {
+const init = async (args) => {
   if (!args.web_url) {
-    console.error("Please provide the '--web-url' parameter.");
+    console.error("Please provide the '--web-url' parameter");
     return app.quit();
   }
   const url = new URL(args.web_url);
