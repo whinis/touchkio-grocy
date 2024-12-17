@@ -13,6 +13,11 @@ const { app } = require("electron");
  * initialization tasks.
  */
 app.whenReady().then(async () => {
+  const lock = app.requestSingleInstanceLock();
+  if (!lock) {
+    console.error("TouchKio is already running");
+    return app.quit();
+  }
   let args = parseArgs(process);
   let argsProvided = !!Object.keys(args).length;
 

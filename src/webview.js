@@ -24,12 +24,10 @@ const init = async (args) => {
   const theme = args.web_theme ? args.web_theme : "dark";
   const zoom = args.web_zoom ? parseFloat(args.web_zoom) : 1.25;
 
-  // Set app theme and name
-  nativeTheme.themeSource = theme;
-  app.setName("TouchKio");
-
   // Init global root window
+  nativeTheme.themeSource = theme;
   WEBVIEW.window = new BaseWindow({
+    title: `TouchKio - ${url.host}`,
     icon: path.join(__dirname, "..", "img", "icon.png"),
   });
   WEBVIEW.window.setMenuBarVisibility(false);
@@ -106,17 +104,27 @@ const windowEvents = (window, zoom) => {
     WEBVIEW.locked = false;
   });
 
-  // Update window status
+  // Handle window status updates
   window.on("minimize", update);
   window.on("restore", update);
   window.on("maximize", update);
   window.on("unmaximize", update);
   window.on("enter-full-screen", update);
   window.on("leave-full-screen", update);
+
+  // Handle signal and exit events
   process.on("SIGINT", app.quit);
   app.on("before-quit", () => {
     WEBVIEW.status = "Terminated";
     integration.update();
+  });
+
+  // Handle multiple instances
+  app.on("second-instance", () => {
+    if (window.isMinimized()) {
+      window.restore();
+    }
+    window.focus();
   });
 };
 
