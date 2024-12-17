@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const readline = require("readline/promises");
 const integration = require("./src/integration");
 const hardware = require("./src/hardware");
@@ -24,9 +25,9 @@ app.whenReady().then(async () => {
     do {
       args = await promptArgs(process);
     } while (!Object.keys(args).length);
-    fs.writeFileSync(argsFilePath, JSON.stringify(args, null, 2));
+    writeArgs(argsFilePath, args);
   } else if (!argsProvided && argsFileExists) {
-    args = JSON.parse(fs.readFileSync(argsFilePath));
+    args = readArgs(argsFilePath);
   }
 
   // Show used arguments
@@ -120,7 +121,7 @@ const promptArgs = async (proc) => {
     },
   ];
 
-  // Prompt questions and wait for the answer
+  // Prompt questions and wait for the answers
   let args = {};
   let ignore = [];
   for (const { key, question, fallback } of prompts) {
@@ -154,6 +155,66 @@ const promptArgs = async (proc) => {
   read.close();
 
   return args;
+};
+
+/**
+ * Writes argument values to the filesystem.
+ *
+ * @param {string} path - Path of the .json file.
+ * @param {Object} args - The arguments object.
+ */
+const writeArgs = (path, args) => {
+  const argc = Object.assign({}, args);
+  if ("mqtt_password" in argc) {
+    argc.mqtt_password = encrypt(argc.mqtt_password);
+  }
+  fs.writeFileSync(path, JSON.stringify(argc, null, 2));
+};
+
+/**
+ * Reads argument values from the filesystem.
+ *
+ * @param {string} path - Path of the .json file.
+ * @returns {Object} The arguments object.
+ */
+const readArgs = (path) => {
+  const args = JSON.parse(fs.readFileSync(path));
+  if ("mqtt_password" in args) {
+    args.mqtt_password = decrypt(args.mqtt_password);
+  }
+  return args;
+};
+
+/**
+ * Helper function for string encryption.
+ *
+ * @param {string} value - Plain text value.
+ * @returns {string} Encrypted value.
+ */
+const encrypt = (value) => {
+  const iv = crypto.randomBytes(16);
+  const key = crypto.scryptSync(hardware.getMachineId(), app.getName(), 32);
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  let encrypted = cipher.update(value, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return Buffer.from(iv.toString("hex") + ":" + encrypted).toString("base64");
+};
+
+/**
+ * Helper function for string decryption.
+ *
+ * @param {string} value - Encrypted value.
+ * @returns {string} Plain text value.
+ */
+const decrypt = (value) => {
+  const p = Buffer.from(value, "base64").toString("utf8").split(":");
+  const iv = Buffer.from(p.shift(), "hex");
+  const key = crypto.scryptSync(hardware.getMachineId(), app.getName(), 32);
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  const buffer = Buffer.from(p.join(":"), "hex");
+  let decrypted = decipher.update(buffer, "binary", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
 };
 
 /**

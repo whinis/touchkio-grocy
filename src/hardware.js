@@ -123,6 +123,15 @@ const getSerialNumber = () => {
 };
 
 /**
+ * Gets the host machine id using `/etc/machine-id`.
+ *
+ * @returns {string|null} The machine id of the system.
+ */
+const getMachineId = () => {
+  return execSyncCommand("cat", ["/etc/machine-id"]);
+};
+
+/**
  * Gets the host name of the current system using `os.hostname()`.
  *
  * @returns {string} The host name of the system.
@@ -364,6 +373,7 @@ module.exports = {
   update,
   getModel,
   getSerialNumber,
+  getMachineId,
   getHostName,
   getUpTime,
   getMemorySize,
