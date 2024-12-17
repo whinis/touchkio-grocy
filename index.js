@@ -71,8 +71,8 @@ const promptArgs = async (proc) => {
     output: proc.stdout,
   });
 
-  // Array of arguments
-  const arguments = [
+  // Array of prompts
+  const prompts = [
     {
       key: "web_url",
       question: "\nEnter WEB url",
@@ -87,6 +87,11 @@ const promptArgs = async (proc) => {
       key: "web_zoom",
       question: "Enter WEB zoom level",
       fallback: "1.25",
+    },
+    {
+      key: "mqtt",
+      question: "\nConnect to MQTT Broker?",
+      fallback: "y/N",
     },
     {
       key: "mqtt_url",
@@ -111,24 +116,39 @@ const promptArgs = async (proc) => {
     {
       key: "check",
       question: "\nEverything looks good?",
-      fallback: "yes",
+      fallback: "Y/n",
     },
   ];
 
-  // Prompt each argument and wait for the answer
+  // Prompt questions and wait for the answer
   let args = {};
-  for (const { key, question, fallback } of arguments) {
-    if (key === "check") {
+  let ignore = [];
+  for (const { key, question, fallback } of prompts) {
+    if (key === "mqtt") {
+      const prompt = `${question} (${fallback}): `;
+      const answer = await read.question(prompt);
+      const value = (answer.trim() || fallback.match(/[YN]/)[0]).toLowerCase();
+      if (!["y", "yes"].includes(value)) {
+        ignore = ignore.concat([
+          "mqtt_url",
+          "mqtt_user",
+          "mqtt_password",
+          "mqtt_discovery",
+        ]);
+      }
+    } else if (key === "check") {
       const json = JSON.stringify(args, null, 2);
       const prompt = `${question}\n${json}\n(${fallback}): `;
-      const answer = (await read.question(prompt)).trim() || fallback;
-      if (!["y", "yes"].includes(answer)) {
+      const answer = await read.question(prompt);
+      const value = (answer.trim() || fallback.match(/[YN]/)[0]).toLowerCase();
+      if (!["y", "yes"].includes(value)) {
         args = {};
       }
-    } else {
+    } else if (!ignore.includes(key)) {
       const prompt = `${question} (${fallback}): `;
-      const answer = (await read.question(prompt)).trim() || fallback;
-      args[key] = answer;
+      const answer = await read.question(prompt);
+      const value = answer.trim() || fallback;
+      args[key] = value;
     }
   }
   read.close();
