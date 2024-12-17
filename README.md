@@ -22,8 +22,8 @@ The kiosk application can be executed with command line arguments to load a **Ho
 Additionally, a **MQTT endpoint** can be defined, allowing the application to provide controls and sensors for the Raspberry Pi and the connected touch display.
 
 ## Setup
-Before you begin, ensure that you have a Raspberry Pi configured and running with a compatible touch display.
-This guide assumes you are using **Raspberry Pi OS Lite (64-bit)**, which is recommended for kiosk applications due to its **lightweight** nature and minimal overhead.
+Before you begin, make sure that you have a Raspberry Pi configured and operational with a compatible touch display.
+This guide assumes that you are using the latest version of **Raspberry Pi OS (64-bit)** together with a desktop environment.
 
 ### Optional
 To utilize the sensor features of your display through Home Assistant, it's essential to have a **MQTT broker running** and the **MQTT integration installed** on your Home Assistant instance.
