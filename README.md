@@ -1,10 +1,10 @@
 # TouchKio
 **TouchKio** is a Node.js application that utilizes **Electron** to create a kiosk mode specifically designed for a Home Assistant dashboard.
-This tool is packaged as a **.deb** file, making it easy to launch the kiosk mode on a **Raspberry Pi** equipped with the official 7" touch display.
+This tool is packaged as a **.deb** file, making it easy to launch the kiosk mode on a **Raspberry Pi** equipped with a touch display.
 
 [![display](https://raw.githubusercontent.com/leukipp/touchkio/main/img/display.png)](https://github.com/leukipp/touchkio/blob/main/img/display.png)
 
-This implementation addresses common issues encountered when using the built-in browser running in fullscreen mode on the Raspberry Pi touch display.
+This implementation addresses common issues encountered when using the built-in browser running in fullscreen mode on the Raspberry Pi with touch display.
 Moreover, the device running the **kiosk application** also offers several **Home Assistant MQTT** sensors, enhancing it's functionality for automation purposes.
 
 ## Features
@@ -99,12 +99,20 @@ Clone this repository and run `yarn install` to install the dependencies.
 Then use `yarn start` to execute the `start` script located in the `package.json` file.
 There you can adjust the `--web-url` and other arguments for development runs.
 
+If you connect to your Raspberry Pi via SSH, you must export the display variables so that the kiosk application can be loaded in the desktop environment:
+```bash
+export DISPLAY=":0"
+export WAYLAND_DISPLAY="wayland-0"
+```
+
 ### The nitty gritty
 
 <details><summary>Don't waste your time reading this.</summary><div></br>
 
-To enable **write access** to the `/sys/class/backlight/10-0045/bl_power` and `/sys/class/backlight/10-0045/brightness` files, you need to set up a **udev rule**.
-This is done within the `install.sh` script, which also creates a `.service` file.
+To enable **write access** to the `/sys/class/backlight/10-0045/bl_power` and `/sys/class/backlight/10-0045/brightness` files, you need to set up a **udev rule**. In case you don't use the official touch display you may have to change the rules, that are located under `/etc/udev/rules.d/backlight-permissions.rules`.
+
+This rule is created via the [install.sh](https://github.com/leukipp/touchkio/blob/main/install.sh) script, which also creates a service file.
+The service file is located at `~/.config/systemd/user/touchkio.service` and starts the `/usr/bin/touchkio` process when the graphical user interface is loaded.
 While creating a service file is optional, it's highly recommended if you want your Raspberry Pi to automatically boot into kiosk mode.
 
 The Raspberry Pi's **build-in screen blanking** function uses the command `swayidle -w timeout 600 'wlopm --off \*' resume 'wlopm --on \*' &` inside `~/.config/labwc/autostart` to blank the screen after **10 minutes**.
@@ -116,8 +124,13 @@ I managed to achieve this for the `brightness` file by implementing a simple `fs
 However, I found that it **never triggered** for the `bl_power` file.
 Although the file content changes, none of the filesystem listeners where fired.
 This could be due to `swayidle`/`wlopm` performing write actions at a deeper level that are not detectable by file listeners.
-As a result, I went for a **polling solution**, checking the state of both files every **500 milliseconds** for any changes.
+As a result, I went for a **polling solution**, checking the state of the file every **500 milliseconds** for any changes.
 While I understand this is not ideal, it's necessary to ensure proper functionality.
+
+The display power status and brightness can be adjusted via the MQTT integration.
+**Support** for changing the power status for **DSI and HDMI** displays is implemented by searching for connected screens inside `/sys/class/drm/*/status`.
+Support for changing the brightness of connected display is implemented by using `/sys/class/backlight/*/brightness`.
+In cases where no supported backlight device is found, the Home Assistant light entity will only show an on/off switch without brightness control.
 
 Keep in mind that default arguments are stored as plain text in `~/.config/touchkio/Arguments.json`.
 This file also includes the **MQTT user password**, which is somewhat obfuscated/encrypted, but in a way that it could be easily reverse engineered.
@@ -126,10 +139,10 @@ When using the kiosk application without initializing the default arguments, you
 This means that the password may be stored as plain text in various files, such as `touchkio.service`, `~/.bash_history`, etc.
 
 To resolve the issue where the first **touch** on a **turned-off screen** triggers a **click event** (potentially activating Home Assistant actions), I implemented a workaround.
-When the screen **turns off**, I remove **focus** from the kiosk window.
+When the screen **turns off** the **focus** is removed from the kiosk window.
 This way, the first click only turns the screen on and focuses the window, allowing subsequent clicks to work as expected.
 
-Additionally, to address the problem that scrolling on the Raspberry Pi only works with the **web browser scrollbar** on the right, I configured the Electron app to **simulate a touch device** using `Emulation.setEmitTouchEventsForMouse`.
+Additionally, to address the problem that scrolling on the Raspberry Pi only works with the **web browser scrollbar** on the right, the Electron app is configured to **simulate a touch device** using `Emulation.setEmitTouchEventsForMouse`.
 This adjustment provides a user experience similar to that of a proper mobile device.
 
 Electron apps are known to be **resource intensive** due to their architecture and the inclusion of a full web browser environment. If you just run the kiosk application without other heavy loads, everything should run smoothly.
@@ -137,8 +150,6 @@ Electron apps are known to be **resource intensive** due to their architecture a
 </div></details>
 
 ## Issues
-- Currently, only the Raspberry Pi 5 in combination with the new touch display 2 supports the MQTT integration.
-  - Other variations, such as Raspberry Pi 4 or Raspberry Pi 5 with touch display 1, could likely be added, but this will require additional testing and contributions via pull requests.
 - You can use Raspberry Pi's build-in screen blanking functionality, however, if the screen is turned on through Home Assistant after being automatically turned off, it will remain on indefinitely.
   - It's recommended to either use the built-in screen blanking feature or implement a Home Assistant automation (e.g., presence detection) to manage the screen status.
 - Hyperlinks that redirect the browser away from the main window are intentionally disabled.
