@@ -2,7 +2,7 @@
     "name": "touchkio",
     "description": "Home Assistant Touch Kiosk",
     "author": "leukipp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "license": "MIT",
     "main": "index.js",
     "scripts": {
