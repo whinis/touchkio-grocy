@@ -93,7 +93,7 @@ const windowEvents = (window, zoom) => {
       window.blur();
     }
     /* This also works, but it doesn't allow to react for screen wake up.
-    window.setIgnoreMouseEvents(getDisplayStatus() === "OFF");
+    window.setIgnoreMouseEvents(hardware.getDisplayStatus() === "OFF");
     */
   });
   window.on("focus", () => {
@@ -136,13 +136,10 @@ const windowEvents = (window, zoom) => {
 const viewEvents = (view) => {
   // Enable webview touch emulation
   view.webContents.debugger.attach("1.1");
-  view.webContents.debugger.sendCommand(
-    "Emulation.setEmitTouchEventsForMouse",
-    {
-      enabled: true,
-      configuration: "mobile",
-    }
-  );
+  view.webContents.debugger.sendCommand("Emulation.setEmitTouchEventsForMouse", {
+    enabled: true,
+    configuration: "mobile",
+  });
 
   // Disable webview hyperlinks
   view.webContents.setWindowOpenHandler(() => {

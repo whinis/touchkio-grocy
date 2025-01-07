@@ -90,12 +90,12 @@ const init = async (args) => {
     updateDisplay(INTEGRATION.client);
   });
 
-  // Update heartbeat time periodically
+  // Update heartbeat time periodically (30s)
   setInterval(() => {
     updateHeartbeat(INTEGRATION.client);
   }, 30 * 1000);
 
-  // Update sensor states periodically
+  // Update sensor states periodically (1min)
   setInterval(update, 60 * 1000);
 
   return true;
@@ -124,18 +124,15 @@ const update = () => {
  */
 const initShutdown = (client) => {
   const root = `${INTEGRATION.discovery}/button/${INTEGRATION.node}/shutdown`;
+  const config = {
+    name: "Shutdown",
+    unique_id: `${INTEGRATION.node}_shutdown`,
+    command_topic: `${root}/execute`,
+    icon: "mdi:power",
+    device: INTEGRATION.device,
+  };
   client
-    .publish(
-      `${root}/config`,
-      JSON.stringify({
-        name: "Shutdown",
-        unique_id: `${INTEGRATION.node}_shutdown`,
-        command_topic: `${root}/execute`,
-        icon: "mdi:power",
-        device: INTEGRATION.device,
-      }),
-      { qos: 1, retain: true }
-    )
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
     .on("message", (topic, message) => {
       if (topic === `${root}/execute`) {
         console.log("Shutdown system...");
@@ -153,18 +150,15 @@ const initShutdown = (client) => {
  */
 const initReboot = (client) => {
   const root = `${INTEGRATION.discovery}/button/${INTEGRATION.node}/reboot`;
+  const config = {
+    name: "Reboot",
+    unique_id: `${INTEGRATION.node}_reboot`,
+    command_topic: `${root}/execute`,
+    icon: "mdi:restart",
+    device: INTEGRATION.device,
+  };
   client
-    .publish(
-      `${root}/config`,
-      JSON.stringify({
-        name: "Reboot",
-        unique_id: `${INTEGRATION.node}_reboot`,
-        command_topic: `${root}/execute`,
-        icon: "mdi:restart",
-        device: INTEGRATION.device,
-      }),
-      { qos: 1, retain: true }
-    )
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
     .on("message", (topic, message) => {
       if (topic === `${root}/execute`) {
         console.log("Rebooting system...");
@@ -182,18 +176,15 @@ const initReboot = (client) => {
  */
 const initRefresh = (client) => {
   const root = `${INTEGRATION.discovery}/button/${INTEGRATION.node}/refresh`;
+  const config = {
+    name: "Refresh",
+    unique_id: `${INTEGRATION.node}_refresh`,
+    command_topic: `${root}/execute`,
+    icon: "mdi:web-refresh",
+    device: INTEGRATION.device,
+  };
   client
-    .publish(
-      `${root}/config`,
-      JSON.stringify({
-        name: "Refresh",
-        unique_id: `${INTEGRATION.node}_refresh`,
-        command_topic: `${root}/execute`,
-        icon: "mdi:web-refresh",
-        device: INTEGRATION.device,
-      }),
-      { qos: 1, retain: true }
-    )
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
     .on("message", (topic, message) => {
       if (topic === `${root}/execute`) {
         console.log("Refreshing webview...");
@@ -211,27 +202,18 @@ const initRefresh = (client) => {
  */
 const initKiosk = (client) => {
   const root = `${INTEGRATION.discovery}/select/${INTEGRATION.node}/kiosk`;
+  const config = {
+    name: `Kiosk`,
+    unique_id: `${INTEGRATION.node}_kiosk`,
+    command_topic: `${root}/set`,
+    state_topic: `${root}/status`,
+    value_template: "{{ value }}",
+    options: ["Framed", "Fullscreen", "Maximized", "Minimized", "Terminated"],
+    icon: "mdi:overscan",
+    device: INTEGRATION.device,
+  };
   client
-    .publish(
-      `${root}/config`,
-      JSON.stringify({
-        name: `Kiosk`,
-        unique_id: `${INTEGRATION.node}_kiosk`,
-        command_topic: `${root}/set`,
-        state_topic: `${root}/status`,
-        value_template: "{{ value }}",
-        options: [
-          "Framed",
-          "Fullscreen",
-          "Maximized",
-          "Minimized",
-          "Terminated",
-        ],
-        icon: "mdi:overscan",
-        device: INTEGRATION.device,
-      }),
-      { qos: 1, retain: true }
-    )
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
     .on("message", (topic, message) => {
       if (topic === `${root}/set`) {
         const status = message.toString();
@@ -275,10 +257,9 @@ const initKiosk = (client) => {
 const updateKiosk = (client) => {
   const kiosk = WEBVIEW.status;
   const root = `${INTEGRATION.discovery}/select/${INTEGRATION.node}/kiosk`;
-  client.publish(`${root}/status`, `${kiosk}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (kiosk !== null) {
+    client.publish(`${root}/status`, `${kiosk}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -288,23 +269,22 @@ const updateKiosk = (client) => {
  */
 const initDisplay = (client) => {
   const root = `${INTEGRATION.discovery}/light/${INTEGRATION.node}/display`;
+  const config = {
+    name: `Display`,
+    unique_id: `${INTEGRATION.node}_display`,
+    command_topic: `${root}/set`,
+    state_topic: `${root}/status`,
+    icon: "mdi:monitor-shimmer",
+    platform: "light",
+    device: INTEGRATION.device,
+  };
+  if (HARDWARE.display.brightness.path !== null) {
+    config.brightness_scale = 100;
+    config.brightness_command_topic = `${root}/brightness/set`;
+    config.brightness_state_topic = `${root}/brightness/status`;
+  }
   client
-    .publish(
-      `${root}/config`,
-      JSON.stringify({
-        name: `Display`,
-        unique_id: `${INTEGRATION.node}_display`,
-        command_topic: `${root}/set`,
-        state_topic: `${root}/status`,
-        brightness_command_topic: `${root}/brightness/set`,
-        brightness_state_topic: `${root}/brightness/status`,
-        brightness_scale: 100,
-        icon: "mdi:monitor-shimmer",
-        platform: "light",
-        device: INTEGRATION.device,
-      }),
-      { qos: 1, retain: true }
-    )
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
     .on("message", (topic, message) => {
       if (topic === `${root}/set`) {
         const status = message.toString();
@@ -330,14 +310,12 @@ const updateDisplay = (client) => {
   const status = hardware.getDisplayStatus();
   const brightness = hardware.getDisplayBrightness();
   const root = `${INTEGRATION.discovery}/light/${INTEGRATION.node}/display`;
-  client.publish(`${root}/status`, `${status}`, {
-    qos: 1,
-    retain: true,
-  });
-  client.publish(`${root}/brightness/status`, `${brightness}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (status !== null) {
+    client.publish(`${root}/status`, `${status}`, { qos: 1, retain: true });
+  }
+  if (brightness !== null) {
+    client.publish(`${root}/brightness/status`, `${brightness}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -347,18 +325,15 @@ const updateDisplay = (client) => {
  */
 const initModel = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/model`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Model`,
-      unique_id: `${INTEGRATION.node}_model`,
-      state_topic: `${root}/status`,
-      value_template: "{{ value }}",
-      icon: "mdi:raspberry-pi",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Model`,
+    unique_id: `${INTEGRATION.node}_model`,
+    state_topic: `${root}/status`,
+    value_template: "{{ value }}",
+    icon: "mdi:raspberry-pi",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateModel(client);
 };
 
@@ -370,10 +345,9 @@ const initModel = (client) => {
 const updateModel = (client) => {
   const model = hardware.getModel();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/model`;
-  client.publish(`${root}/status`, `${model}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (model !== null) {
+    client.publish(`${root}/status`, `${model}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -383,18 +357,15 @@ const updateModel = (client) => {
  */
 const initSerialNumber = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/serial_number`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Serial Number`,
-      unique_id: `${INTEGRATION.node}_serial_number`,
-      state_topic: `${root}/status`,
-      value_template: "{{ value }}",
-      icon: "mdi:hexadecimal",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Serial Number`,
+    unique_id: `${INTEGRATION.node}_serial_number`,
+    state_topic: `${root}/status`,
+    value_template: "{{ value }}",
+    icon: "mdi:hexadecimal",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateSerialNumber(client);
 };
 
@@ -406,10 +377,9 @@ const initSerialNumber = (client) => {
 const updateSerialNumber = (client) => {
   const serialNumber = hardware.getSerialNumber();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/serial_number`;
-  client.publish(`${root}/status`, `${serialNumber}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (serialNumber !== null) {
+    client.publish(`${root}/status`, `${serialNumber}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -419,18 +389,15 @@ const updateSerialNumber = (client) => {
  */
 const initHostName = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/host_name`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Host Name`,
-      unique_id: `${INTEGRATION.node}_host_name`,
-      state_topic: `${root}/status`,
-      value_template: "{{ value }}",
-      icon: "mdi:console-network",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Host Name`,
+    unique_id: `${INTEGRATION.node}_host_name`,
+    state_topic: `${root}/status`,
+    value_template: "{{ value }}",
+    icon: "mdi:console-network",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateHostName(client);
 };
 
@@ -442,10 +409,9 @@ const initHostName = (client) => {
 const updateHostName = (client) => {
   const hostName = hardware.getHostName();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/host_name`;
-  client.publish(`${root}/status`, `${hostName}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (hostName !== null) {
+    client.publish(`${root}/status`, `${hostName}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -455,19 +421,16 @@ const updateHostName = (client) => {
  */
 const initUpTime = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/up_time`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Up Time`,
-      unique_id: `${INTEGRATION.node}_up_time`,
-      state_topic: `${root}/status`,
-      value_template: "{{ (value | float) | round(0) }}",
-      unit_of_measurement: "min",
-      icon: "mdi:timeline-clock",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Up Time`,
+    unique_id: `${INTEGRATION.node}_up_time`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(0) }}",
+    unit_of_measurement: "min",
+    icon: "mdi:timeline-clock",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateUpTime(client);
 };
 
@@ -479,10 +442,9 @@ const initUpTime = (client) => {
 const updateUpTime = (client) => {
   const upTime = hardware.getUpTime();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/up_time`;
-  client.publish(`${root}/status`, `${upTime}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (upTime !== null) {
+    client.publish(`${root}/status`, `${upTime}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -492,19 +454,16 @@ const updateUpTime = (client) => {
  */
 const initMemorySize = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/memory_size`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Memory Size`,
-      unique_id: `${INTEGRATION.node}_memory_size`,
-      state_topic: `${root}/status`,
-      value_template: "{{ (value | float) | round(2) }}",
-      unit_of_measurement: "GiB",
-      icon: "mdi:memory",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Memory Size`,
+    unique_id: `${INTEGRATION.node}_memory_size`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(2) }}",
+    unit_of_measurement: "GiB",
+    icon: "mdi:memory",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateMemorySize(client);
 };
 
@@ -516,10 +475,9 @@ const initMemorySize = (client) => {
 const updateMemorySize = (client) => {
   const memorySize = hardware.getMemorySize();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/memory_size`;
-  client.publish(`${root}/status`, `${memorySize}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (memorySize !== null) {
+    client.publish(`${root}/status`, `${memorySize}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -529,19 +487,16 @@ const updateMemorySize = (client) => {
  */
 const initMemoryUsage = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/memory_usage`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Memory Usage`,
-      unique_id: `${INTEGRATION.node}_memory_usage`,
-      state_topic: `${root}/status`,
-      value_template: "{{ (value | float) | round(0) }}",
-      unit_of_measurement: "%",
-      icon: "mdi:memory-arrow-down",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Memory Usage`,
+    unique_id: `${INTEGRATION.node}_memory_usage`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(0) }}",
+    unit_of_measurement: "%",
+    icon: "mdi:memory-arrow-down",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateMemoryUsage(client);
 };
 
@@ -553,10 +508,9 @@ const initMemoryUsage = (client) => {
 const updateMemoryUsage = (client) => {
   const memoryUsage = hardware.getMemoryUsage();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/memory_usage`;
-  client.publish(`${root}/status`, `${memoryUsage}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (memoryUsage !== null) {
+    client.publish(`${root}/status`, `${memoryUsage}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -566,19 +520,16 @@ const updateMemoryUsage = (client) => {
  */
 const initProcessorUsage = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/processor_usage`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Processor Usage`,
-      unique_id: `${INTEGRATION.node}_processor_usage`,
-      state_topic: `${root}/status`,
-      value_template: "{{ (value | float) | round(0) }}",
-      unit_of_measurement: "%",
-      icon: "mdi:cpu-64-bit",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Processor Usage`,
+    unique_id: `${INTEGRATION.node}_processor_usage`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(0) }}",
+    unit_of_measurement: "%",
+    icon: "mdi:cpu-64-bit",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateProcessorUsage(client);
 };
 
@@ -590,10 +541,9 @@ const initProcessorUsage = (client) => {
 const updateProcessorUsage = (client) => {
   const processorUsage = hardware.getProcessorUsage();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/processor_usage`;
-  client.publish(`${root}/status`, `${processorUsage}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (processorUsage !== null) {
+    client.publish(`${root}/status`, `${processorUsage}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -603,19 +553,16 @@ const updateProcessorUsage = (client) => {
  */
 const initProcessorTemperature = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/processor_temperature`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Processor Temperature`,
-      unique_id: `${INTEGRATION.node}_processor_temperature`,
-      state_topic: `${root}/status`,
-      value_template: "{{ (value | float) | round(0) }}",
-      unit_of_measurement: "°C",
-      icon: "mdi:radiator",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Processor Temperature`,
+    unique_id: `${INTEGRATION.node}_processor_temperature`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(0) }}",
+    unit_of_measurement: "°C",
+    icon: "mdi:radiator",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateProcessorTemperature(client);
 };
 
@@ -627,10 +574,9 @@ const initProcessorTemperature = (client) => {
 const updateProcessorTemperature = (client) => {
   const processorTemperature = hardware.getProcessorTemperature();
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/processor_temperature`;
-  client.publish(`${root}/status`, `${processorTemperature}`, {
-    qos: 1,
-    retain: true,
-  });
+  if (processorTemperature !== null) {
+    client.publish(`${root}/status`, `${processorTemperature}`, { qos: 1, retain: true });
+  }
 };
 
 /**
@@ -640,18 +586,15 @@ const updateProcessorTemperature = (client) => {
  */
 const initHeartbeat = (client) => {
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/heartbeat`;
-  client.publish(
-    `${root}/config`,
-    JSON.stringify({
-      name: `Heartbeat`,
-      unique_id: `${INTEGRATION.node}_heartbeat`,
-      state_topic: `${root}/status`,
-      value_template: "{{ value }}",
-      icon: "mdi:heart-flash",
-      device: INTEGRATION.device,
-    }),
-    { qos: 1, retain: true }
-  );
+  const config = {
+    name: `Heartbeat`,
+    unique_id: `${INTEGRATION.node}_heartbeat`,
+    state_topic: `${root}/status`,
+    value_template: "{{ value }}",
+    icon: "mdi:heart-flash",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
   updateHeartbeat(client);
 };
 
@@ -665,10 +608,7 @@ const updateHeartbeat = (client) => {
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000);
   const heartbeat = local.toISOString().replace(/\.\d{3}Z$/, "");
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/heartbeat`;
-  client.publish(`${root}/status`, `${heartbeat}`, {
-    qos: 1,
-    retain: true,
-  });
+  client.publish(`${root}/status`, `${heartbeat}`, { qos: 1, retain: true });
 };
 
 module.exports = {

@@ -135,12 +135,7 @@ const promptArgs = async (proc) => {
       const answer = await read.question(prompt);
       const value = (answer.trim() || fallback.match(/[YN]/)[0]).toLowerCase();
       if (!["y", "yes"].includes(value)) {
-        ignore = ignore.concat([
-          "mqtt_url",
-          "mqtt_user",
-          "mqtt_password",
-          "mqtt_discovery",
-        ]);
+        ignore = ignore.concat(["mqtt_url", "mqtt_user", "mqtt_password", "mqtt_discovery"]);
       }
     } else if (key === "check") {
       const json = JSON.stringify(args, null, 2);
