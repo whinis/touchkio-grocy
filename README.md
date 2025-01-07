@@ -1,6 +1,6 @@
 # TouchKio
-**TouchKio** is a Node.js application that utilizes **Electron** to create a kiosk mode specifically designed for a Home Assistant dashboard.
-This tool is packaged as a **.deb** file, making it easy to launch the kiosk mode on a **Raspberry Pi** equipped with a touch display.
+**TouchKio** is a Node.js application that utilizes **Electron** to create a kiosk mode specifically designed for a Home Assistant dashboard (or any other [webpage](https://github.com/leukipp/touchkio/blob/main/HARDWARE.md)).
+This tool is packaged as a **.deb** file, making it easy to launch the kiosk mode on a **Raspberry Pi** (or similar [hardware](https://github.com/leukipp/touchkio/blob/main/HARDWARE.md)) equipped with a touch display.
 
 [![display](https://raw.githubusercontent.com/leukipp/touchkio/main/img/display.png)](https://github.com/leukipp/touchkio/blob/main/img/display.png)
 
@@ -22,8 +22,8 @@ The kiosk application can be executed with command line arguments to load a **Ho
 Additionally, a **MQTT endpoint** can be defined, allowing the application to provide controls and sensors for the Raspberry Pi and the connected touch display.
 
 ## Setup
-Before you begin, make sure that you have a Raspberry Pi configured and operational with a compatible touch display.
-This guide assumes that you are using the latest version of **Raspberry Pi OS (64-bit)** together with a desktop environment.
+Before you begin, make sure that you have a Raspberry Pi configured and operational with a [compatible touch display](https://github.com/leukipp/touchkio/blob/main/HARDWARE.md).
+This guide assumes that you are using the latest version of **Raspberry Pi OS (64-bit)** together with a **Wayland** based desktop environment.
 
 ### Optional
 To utilize the sensor features of your display through Home Assistant, it's essential to have a **MQTT broker running** and the **MQTT integration installed** on your Home Assistant instance.
@@ -96,7 +96,7 @@ touchkio --web-url=http://192.168.1.42:8123 --mqtt-url=mqtt://192.168.1.42:1883 
 If you want to create your own local build install [nodejs](https://pimylifeup.com/raspberry-pi-nodejs) and [yarn](https://classic.yarnpkg.com/lang/en/docs/install) on your Raspberry Pi.
 
 Clone this repository and run `yarn install` to install the dependencies.
-Then use `yarn start` to execute the `start` script located in the `package.json` file.
+Then use `yarn start` to execute the `start` script located in the [package.json](https://github.com/leukipp/touchkio/blob/main/package.json) file.
 There you can adjust the `--web-url` and other arguments for development runs.
 
 If you connect to your Raspberry Pi via SSH, you must export the display variables so that the kiosk application can be loaded in the desktop environment:
@@ -128,7 +128,7 @@ As a result, I went for a **polling solution**, checking the state of the file e
 While I understand this is not ideal, it's necessary to ensure proper functionality.
 
 The display power status and brightness can be adjusted via the MQTT integration.
-**Support** for changing the power status for **DSI and HDMI** displays is implemented by searching for connected screens inside `/sys/class/drm/*/status`.
+**Support** for changing the power status for **DSI and HDMI** displays is achieved by checking for connected screens in `/sys/class/drm/*/status`.
 Support for changing the brightness of connected display is implemented by using `/sys/class/backlight/*/brightness`.
 In cases where no supported backlight device is found, the Home Assistant light entity will only show an on/off switch without brightness control.
 
@@ -150,8 +150,12 @@ Electron apps are known to be **resource intensive** due to their architecture a
 </div></details>
 
 ## Issues
+Please have a look into the [hardware](https://github.com/leukipp/touchkio/blob/main/HARDWARE.md) documentation if you ran into any issues. 
+
+- Depending on the display hardware you are using, some features of the MQTT integration may not fully work (e.g. display brightness control).
+  - This is especially common when using X11 instead of Wayland (default on Raspberry Pi OS).
 - You can use Raspberry Pi's build-in screen blanking functionality, however, if the screen is turned on through Home Assistant after being automatically turned off, it will remain on indefinitely.
-  - It's recommended to either use the built-in screen blanking feature or implement a Home Assistant automation (e.g., presence detection) to manage the screen status.
+  - It's recommended to either use the built-in screen blanking feature or implement a Home Assistant automation (e.g. presence detection) to manage the screen status.
 - Hyperlinks that redirect the browser away from the main window are intentionally disabled.
   - This decision was made to maintain a clean design, as navigation buttons to move back and forth between different sites were not included.
 - On the Raspberry Pi terminal you may see some *ERROR:gbm_wrapper.cc* messages.
