@@ -1,13 +1,22 @@
 const os = require("os");
 const fs = require("fs");
+const path = require("path");
 const process = require("child_process");
 
 global.HARDWARE = global.HARDWARE || {
   initialized: false,
   status: "invalid",
   display: {
-    status: null,
-    brightness: null,
+    name: null,
+    status: {
+      path: null,
+      value: null,
+    },
+    brightness: {
+      path: null,
+      value: null,
+      max: null,
+    },
     notifiers: [],
   },
 };
@@ -23,20 +32,29 @@ const init = async (args) => {
     return false;
   }
 
-  // Check supported hardware
-  if (!hardwareExists()) {
-    console.warn("Hardware not supported");
+  // Check device support
+  if (!compatibleDevice()) {
+    console.warn("Device not supported");
     return false;
   }
 
-  // Check supported model
+  // Check model support
   const model = getModel();
-  if (!model || !model.includes("Raspberry Pi 5")) {
-    console.warn(`Device ${model} not supported`);
+  if (!model || !model.includes("Raspberry Pi")) {
+    console.warn(`${model} not supported`);
     return false;
   }
 
-  console.log("\nModel:", getModel());
+  // Init globals
+  HARDWARE.display.name = getDisplayName();
+  HARDWARE.display.status.path = getDisplayStatusPath(HARDWARE.display.name);
+  HARDWARE.display.brightness.path = getDisplayBrightnessPath(HARDWARE.display.name);
+  HARDWARE.display.brightness.max = getDisplayBrightnessMax();
+  HARDWARE.initialized = true;
+  HARDWARE.status = "valid";
+
+  // Show device infos
+  console.log("\nModel:", model);
   console.log("Serial Number:", getSerialNumber());
   console.log("Host Name:", getHostName());
   console.log("Up Time:", getUpTime());
@@ -44,12 +62,11 @@ const init = async (args) => {
   console.log("Memory Usage:", getMemoryUsage());
   console.log("Processor Usage:", getProcessorUsage());
   console.log("Processor Temperature:", getProcessorTemperature());
-  console.log("Display Status:", getDisplayStatus());
-  console.log("Display Brightness:", getDisplayBrightness(), "\n");
 
-  // Init globals
-  HARDWARE.initialized = true;
-  HARDWARE.status = "valid";
+  // Show display infos
+  console.log("\nDisplay Name:", HARDWARE.display.name);
+  console.log(`Display Status [${HARDWARE.display.status.path}]:`, getDisplayStatus());
+  console.log(`Display Brightness [${HARDWARE.display.brightness.path}]:`, getDisplayBrightness(), "\n");
 
   // Check for display changes
   setInterval(update, 500);
@@ -64,40 +81,43 @@ const update = () => {
   if (!HARDWARE.initialized) {
     return;
   }
-  const path = "/sys/class/backlight/10-0045";
 
   // Display status has changed
-  const status = fs.readFileSync(`${path}/bl_power`, "utf8").trim();
-  if (status !== HARDWARE.display.status) {
-    console.log("Update Display Status:", getDisplayStatus());
-    HARDWARE.display.status = status;
-    HARDWARE.display.notifiers.forEach((notifier) => {
-      notifier();
-    });
+  if (HARDWARE.display.status.path !== null) {
+    const status = fs.readFileSync(`${HARDWARE.display.status.path}/enabled`, "utf8").trim();
+    if (status !== HARDWARE.display.status.value) {
+      console.log("Update Display Status:", getDisplayStatus());
+      HARDWARE.display.status.value = status;
+      HARDWARE.display.notifiers.forEach((notifier) => {
+        notifier();
+      });
+    }
   }
 
   // Display brightness has changed
-  const brightness = fs.readFileSync(`${path}/brightness`, "utf8").trim();
-  if (brightness !== HARDWARE.display.brightness) {
-    console.log("Update Display Brightness:", getDisplayBrightness());
-    HARDWARE.display.brightness = brightness;
-    HARDWARE.display.notifiers.forEach((notifier) => {
-      notifier();
-    });
+  if (HARDWARE.display.brightness.path !== null) {
+    const brightness = fs.readFileSync(`${HARDWARE.display.brightness.path}/brightness`, "utf8").trim();
+    if (brightness !== HARDWARE.display.brightness.value) {
+      console.log("Update Display Brightness:", getDisplayBrightness());
+      HARDWARE.display.brightness.value = brightness;
+      HARDWARE.display.notifiers.forEach((notifier) => {
+        notifier();
+      });
+    }
   }
 };
 
 /**
- * Verifies hardware compatibility by checking the presence of necessary sys files.
+ * Verifies device compatibility by checking the presence of necessary sys files.
  *
  * @returns {bool} Returns true if all files exists.
  */
-const hardwareExists = () => {
+const compatibleDevice = () => {
   const files = [
+    "/sys/class/drm",
+    "/sys/class/backlight",
     "/sys/firmware/devicetree/base/model",
     "/sys/firmware/devicetree/base/serial-number",
-    "/sys/class/backlight/10-0045/brightness",
-    "/sys/class/backlight/10-0045/bl_power",
   ];
   return files.every((file) => fs.existsSync(file));
 };
@@ -117,9 +137,7 @@ const getModel = () => {
  * @returns {string|null} The serial number of the Raspberry Pi or null if an error occurs.
  */
 const getSerialNumber = () => {
-  return execSyncCommand("cat", [
-    "/sys/firmware/devicetree/base/serial-number",
-  ]);
+  return execSyncCommand("cat", ["/sys/firmware/devicetree/base/serial-number"]);
 };
 
 /**
@@ -193,6 +211,41 @@ const getProcessorTemperature = () => {
 };
 
 /**
+ * Gets the primary display name using `wlopm`.
+ *
+ * @returns {string|null} The output of the command or null if an error occurs.
+ */
+const getDisplayName = () => {
+  const status = execSyncCommand("wlopm", []);
+  if (status !== null) {
+    const out = status.split("\n")[0].split(" ");
+    return out.shift();
+  }
+  return null;
+};
+
+/**
+ * Gets the current display status path using `/sys/class/drm`.
+ *
+ * @param {string} name - Primary display name.
+ * @returns {string|null} The display status path or null if nothing was found.
+ */
+const getDisplayStatusPath = (name) => {
+  const drm = "/sys/class/drm";
+  for (const card of fs.readdirSync(drm)) {
+    const statusFile = path.join(drm, card, "status");
+    if (!fs.existsSync(statusFile)) {
+      continue;
+    }
+    const content = fs.readFileSync(statusFile, "utf8").trim();
+    if (card.includes(name) && content === "connected") {
+      return path.join(drm, card);
+    }
+  }
+  return null;
+};
+
+/**
  * Gets the current display power status using `wlopm`.
  *
  * @returns {string|null} The output of the command or null if an error occurs.
@@ -200,18 +253,10 @@ const getProcessorTemperature = () => {
 const getDisplayStatus = () => {
   const status = execSyncCommand("wlopm", []);
   if (status !== null) {
-    return status.slice(status.lastIndexOf(" ") + 1).toUpperCase();
+    const out = status.split("\n")[0].split(" ");
+    return out.pop().toUpperCase();
   }
   return null;
-
-  /* This also works, but it's better to use `wlopm` for getter and setter methods.
-  const status = execSyncCommand("cat", [
-    "/sys/class/backlight/10-0045/bl_power",
-  ]);
-  if (status !== null) {
-    return status === "0" ? "ON" : "OFF";
-  }
-  */
 };
 
 /**
@@ -229,60 +274,85 @@ const setDisplayStatus = (status, callback = null) => {
     if (typeof callback === "function") callback(null, "Invalid status");
     return;
   }
-  const args = status === "ON" ? ["--on", "*"] : ["--off", "*"];
+  const args = [`--${status.toLowerCase()}`, HARDWARE.display.name];
   execAsyncCommand("wlopm", args, callback);
-
-  /* This also works, but interferes with the built-in screen blanking function.
-  const value = status === "ON" ? "0" : "4";
-  const proc = execAsyncCommand(
-    "tee",
-    ["/sys/class/backlight/10-0045/bl_power"],
-    callback
-  );
-  proc.stdin.write(value.toString());
-  proc.stdin.end();
-  */
 };
 
 /**
- * Gets the current display brightness level using `/sys/class/backlight/10-0045/brightness`.
+ * Gets the current display brightness path using `/sys/class/backlight`.
  *
- * This function retrieves the brightness level, which is in the range of 0-31,
- * and maps it to a percentage in the range of 0-100 percent.
- *
- * @returns {number|null} The brightness level as a percentage or null if an error occurs.
+ * @param {string} name - Primary display name.
+ * @returns {string|null} The display brightness path or null if nothing was found.
  */
-const getDisplayBrightness = () => {
-  const brightness = execSyncCommand("cat", [
-    "/sys/class/backlight/10-0045/brightness",
-  ]);
-  if (brightness !== null) {
-    return Math.round((parseInt(brightness, 10) / 31) * 100);
+const getDisplayBrightnessPath = (name) => {
+  const backlight = "/sys/class/backlight";
+  for (const address of fs.readdirSync(backlight)) {
+    const nameFile = path.join(backlight, address, "display_name");
+    if (!fs.existsSync(nameFile)) {
+      continue;
+    }
+    const content = fs.readFileSync(nameFile, "utf8").trim();
+    if (content.includes(name)) {
+      return path.join(backlight, address);
+    }
   }
   return null;
 };
 
 /**
- * Sets the display brightness level using `/sys/class/backlight/10-0045/brightness`.
+ * Gets the maximum display brightness value using `/sys/class/backlight/.../max_brightness`.
  *
- * This function takes a brightness value in the range of 1-100 percent,
- * maps it to the range of 0-31, and writes it to the system.
+ * @returns {number|null} The brightness maximum value or null if an error occurs.
+ */
+const getDisplayBrightnessMax = () => {
+  if (!HARDWARE.display.brightness.path) {
+    return null;
+  }
+  const max = execSyncCommand("cat", [`${HARDWARE.display.brightness.path}/max_brightness`]);
+  if (max !== null) {
+    return parseInt(max, 10);
+  }
+  return null;
+};
+
+/**
+ * Gets the current display brightness level using `/sys/class/backlight/.../brightness`.
+ *
+ * @returns {number|null} The brightness level as a percentage or null if an error occurs.
+ */
+const getDisplayBrightness = () => {
+  if (!HARDWARE.display.brightness.path) {
+    return null;
+  }
+  const brightness = execSyncCommand("cat", [`${HARDWARE.display.brightness.path}/brightness`]);
+  if (brightness !== null) {
+    const max = HARDWARE.display.brightness.max;
+    return Math.round((parseInt(brightness, 10) / max) * 100);
+  }
+  return null;
+};
+
+/**
+ * Sets the display brightness level using `/sys/class/backlight/.../brightness`.
+ *
+ * This function takes a brightness value between 1 to 100 percent,
+ * maps it to the proper range and writes it to the system.
  *
  * @param {number} brightness - The desired brightness level (1-100).
  * @param {function} callback - A callback function that receives the output or error.
  */
 const setDisplayBrightness = (brightness, callback = null) => {
+  if (!HARDWARE.display.brightness.path) {
+    return;
+  }
   if (typeof brightness !== "number" || brightness < 1 || brightness > 100) {
     console.error("Brightness must be a number between 1 and 100");
     if (typeof callback === "function") callback(null, "Invalid brightness");
     return;
   }
-  const value = Math.max(1, Math.min(Math.round((brightness / 100) * 31), 31));
-  const proc = execAsyncCommand(
-    "tee",
-    ["/sys/class/backlight/10-0045/brightness"],
-    callback
-  );
+  const max = HARDWARE.display.brightness.max;
+  const value = Math.max(1, Math.min(Math.round((brightness / 100) * max), max));
+  const proc = execAsyncCommand("tee", [`${HARDWARE.display.brightness.path}/brightness`], callback);
   proc.stdin.write(value.toString());
   proc.stdin.end();
 };
@@ -320,9 +390,7 @@ const rebootSystem = (callback = null) => {
  */
 const execSyncCommand = (cmd, args = []) => {
   try {
-    const output = process.execSync([cmd, ...args].join(" "), {
-      encoding: "utf8",
-    });
+    const output = process.execSync([cmd, ...args].join(" "), { encoding: "utf8" });
     return output.trim().replace(/\0/g, "");
   } catch (error) {
     console.error("Execute Sync:", error.message);
@@ -380,8 +448,12 @@ module.exports = {
   getMemoryUsage,
   getProcessorUsage,
   getProcessorTemperature,
+  getDisplayName,
+  getDisplayStatusPath,
   getDisplayStatus,
   setDisplayStatus,
+  getDisplayBrightnessPath,
+  getDisplayBrightnessMax,
   getDisplayBrightness,
   setDisplayBrightness,
   shutdownSystem,
