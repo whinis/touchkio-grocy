@@ -20,7 +20,7 @@ Any SBC clones of the Raspberry Pi that operate on **Raspberry Pi OS (64-bit)** 
 ### HDMI
 | Device         | Display           | Tested | Status                | Notes                                                 |
 | -------------- | ----------------- | ------ | --------------------- | ----------------------------------------------------- |
-| Raspberry Pi 4 | -                 | ✅      | Partially operational | -                                                     |
+| Raspberry Pi 4 | [LAFVIN 5" Touch Display](https://www.amazon.de/gp/product/B0BWJ8YP7S) | ✅      | Partially operational | Display brightness control is not available via MQTT. |
 | Raspberry Pi 5 | Generic Non-Touch | ✅      | Partially operational | Display brightness control is not available via MQTT. |
 
 ## Contributions
