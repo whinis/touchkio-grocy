@@ -23,33 +23,29 @@ const init = async (args) => {
   const discovery = args.mqtt_discovery ? args.mqtt_discovery : "homeassistant";
 
   const model = hardware.getModel();
+  const vendor = hardware.getVendor();
   const hostName = hardware.getHostName();
   const serialNumber = hardware.getSerialNumber();
+  const serialNumberSuffix = serialNumber.slice(-6);
 
-  const deviceId = serialNumber.slice(-6).toUpperCase();
+  const deviceId = serialNumberSuffix.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const deviceName = hostName.charAt(0).toUpperCase() + hostName.slice(1);
 
   // Init globals
   INTEGRATION.node = `rpi_${deviceId}`;
   INTEGRATION.discovery = discovery;
   INTEGRATION.device = {
-    name: `Raspberry Pi ${deviceName}`,
+    name: `TouchKio ${deviceName}`,
     model: model,
     serial_number: serialNumber,
-    manufacturer: "Raspberry Pi Ltd",
+    manufacturer: vendor,
     identifiers: [INTEGRATION.node],
     sw_version: `${app.getName()}-v${app.getVersion()}`,
   };
 
   // Connection settings
   const masked = password === null ? "null" : "*".repeat(password.length);
-  const options =
-    user === null || password == null
-      ? null
-      : {
-          username: user,
-          password: password,
-        };
+  const options = user === null || password == null ? null : { username: user, password: password };
   console.log("MQTT Connecting:", `${user}:${masked}@${url.toString()}`);
   INTEGRATION.client = mqtt.connect(url.toString(), options);
 
@@ -278,7 +274,7 @@ const initDisplay = (client) => {
     platform: "light",
     device: INTEGRATION.device,
   };
-  if (HARDWARE.display.brightness.path !== null) {
+  if (HARDWARE.support.displayBrightness) {
     config.brightness_scale = 100;
     config.brightness_command_topic = `${root}/brightness/set`;
     config.brightness_state_topic = `${root}/brightness/status`;

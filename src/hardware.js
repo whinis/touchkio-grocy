@@ -6,8 +6,8 @@ const process = require("child_process");
 global.HARDWARE = global.HARDWARE || {
   initialized: false,
   status: "invalid",
+  support: {},
   display: {
-    name: null,
     status: {
       path: null,
       value: null,
@@ -38,34 +38,35 @@ const init = async (args) => {
     return false;
   }
 
-  // Check model support
-  const model = getModel();
-  if (!model || !model.includes("Raspberry Pi")) {
-    console.warn(`${model} not supported`);
-    return false;
-  }
-
   // Init globals
-  HARDWARE.display.name = getDisplayName();
-  HARDWARE.display.status.path = getDisplayStatusPath(HARDWARE.display.name);
-  HARDWARE.display.brightness.path = getDisplayBrightnessPath(HARDWARE.display.name);
+  HARDWARE.support.session = sessionType();
+  HARDWARE.display.status.path = getDisplayStatusPath();
+  HARDWARE.support.displayStatus = HARDWARE.display.status.path !== null;
+  HARDWARE.display.brightness.path = getDisplayBrightnessPath();
+  HARDWARE.support.displayBrightness = HARDWARE.display.brightness.path !== null;
   HARDWARE.display.brightness.max = getDisplayBrightnessMax();
   HARDWARE.initialized = true;
   HARDWARE.status = "valid";
 
+  // Show session infos
+  console.log("\nUser:", os.userInfo().username);
+  console.log("Session:", HARDWARE.support.session);
+
   // Show device infos
-  console.log("\nModel:", model);
+  console.log("\nModel:", getModel());
+  console.log("Vendor:", getVendor());
   console.log("Serial Number:", getSerialNumber());
   console.log("Host Name:", getHostName());
-  console.log("Up Time:", getUpTime());
+
+  // Show system infos
+  console.log("\nUp Time:", getUpTime());
   console.log("Memory Size:", getMemorySize());
   console.log("Memory Usage:", getMemoryUsage());
   console.log("Processor Usage:", getProcessorUsage());
   console.log("Processor Temperature:", getProcessorTemperature());
 
   // Show display infos
-  console.log("\nDisplay Name:", HARDWARE.display.name);
-  console.log(`Display Status [${HARDWARE.display.status.path}]:`, getDisplayStatus());
+  console.log(`\nDisplay Status [${HARDWARE.display.status.path}]:`, getDisplayStatus());
   console.log(`Display Brightness [${HARDWARE.display.brightness.path}]:`, getDisplayBrightness(), "\n");
 
   // Check for display changes
@@ -83,8 +84,8 @@ const update = () => {
   }
 
   // Display status has changed
-  if (HARDWARE.display.status.path !== null) {
-    const status = fs.readFileSync(`${HARDWARE.display.status.path}/enabled`, "utf8").trim();
+  if (HARDWARE.support.displayStatus) {
+    const status = fs.readFileSync(`${HARDWARE.display.status.path}/dpms`, "utf8").trim();
     if (status !== HARDWARE.display.status.value) {
       console.log("Update Display Status:", getDisplayStatus());
       HARDWARE.display.status.value = status;
@@ -95,7 +96,7 @@ const update = () => {
   }
 
   // Display brightness has changed
-  if (HARDWARE.display.brightness.path !== null) {
+  if (HARDWARE.support.displayBrightness) {
     const brightness = fs.readFileSync(`${HARDWARE.display.brightness.path}/brightness`, "utf8").trim();
     if (brightness !== HARDWARE.display.brightness.value) {
       console.log("Update Display Brightness:", getDisplayBrightness());
@@ -108,45 +109,96 @@ const update = () => {
 };
 
 /**
- * Verifies device compatibility by checking the presence of necessary sys files.
+ * Verifies device compatibility by checking the presence of necessary sys paths.
  *
- * @returns {bool} Returns true if all files exists.
+ * @returns {bool} Returns true if all paths exists.
  */
 const compatibleDevice = () => {
-  const files = [
-    "/sys/class/drm",
-    "/sys/class/backlight",
-    "/sys/firmware/devicetree/base/model",
-    "/sys/firmware/devicetree/base/serial-number",
-  ];
-  return files.every((file) => fs.existsSync(file));
+  if (os.platform() !== "linux") {
+    return false;
+  }
+  const paths = ["/sys/class/drm", "/sys/class/backlight", "/sys/class/thermal"];
+  return paths.every((path) => fs.existsSync(path));
 };
 
 /**
- * Gets the Raspberry Pi model name using `/sys/firmware/devicetree/base/model`.
+ * Queries the session type for the logged in user.
  *
- * @returns {string|null} The model of the Raspberry Pi or null if an error occurs.
+ * @returns {string} Returns session type x11/wayland or null if an error occurs.
+ */
+const sessionType = () => {
+  return execSyncCommand("loginctl", [
+    "show-session",
+    "$(loginctl show-user $(whoami) -p Display --value)",
+    "-p Type --value",
+  ]);
+};
+
+/**
+ * Checks the session type for the logged in user.
+ *
+ * @returns {bool} Returns true if the session matches the type.
+ */
+const session = (type) => {
+  return HARDWARE.support.session == type;
+};
+
+/**
+ * Gets the model name using `/sys/firmware/devicetree/base/model` or `/sys/class/dmi/id/product_name`.
+ *
+ * @returns {string|null} The model name of the device or "Generic" if not found.
  */
 const getModel = () => {
-  return execSyncCommand("cat", ["/sys/firmware/devicetree/base/model"]);
+  const paths = ["/sys/firmware/devicetree/base/model", "/sys/class/dmi/id/product_name"];
+  for (const path of paths) {
+    if (fs.existsSync(path)) {
+      return execSyncCommand("sudo", ["cat", path]);
+    }
+  }
+  return "Generic";
 };
 
 /**
- * Gets the Raspberry Pi serial number using `/sys/firmware/devicetree/base/serial-number`.
+ * Gets the vendor name using `/sys/class/dmi/id/board_vendor`.
  *
- * @returns {string|null} The serial number of the Raspberry Pi or null if an error occurs.
+ * @returns {string|null} The vendor name of the device or "Generic" if not found.
+ */
+const getVendor = () => {
+  const paths = ["/sys/class/dmi/id/board_vendor"];
+  for (const path of paths) {
+    if (fs.existsSync(path)) {
+      return execSyncCommand("sudo", ["cat", path]);
+    }
+  }
+  const model = getModel();
+  if (model.includes("Raspberry Pi")) {
+    return "Raspberry Pi Ltd";
+  }
+  return "Generic";
+};
+
+/**
+ * Gets the serial number using `/sys/firmware/devicetree/base/serial-number` or `/sys/class/dmi/id/product_serial`.
+ *
+ * @returns {string|null} The serial number of the device or "123456" if not found.
  */
 const getSerialNumber = () => {
-  return execSyncCommand("cat", ["/sys/firmware/devicetree/base/serial-number"]);
+  const paths = ["/sys/firmware/devicetree/base/serial-number", "/sys/class/dmi/id/product_serial"];
+  for (const path of paths) {
+    if (fs.existsSync(path)) {
+      return execSyncCommand("sudo", ["cat", path]);
+    }
+  }
+  return "123456";
 };
 
 /**
  * Gets the host machine id using `/etc/machine-id`.
  *
- * @returns {string|null} The machine id of the system.
+ * @returns {string} The machine id of the system or "123456" if not found.
  */
 const getMachineId = () => {
-  return execSyncCommand("cat", ["/etc/machine-id"]);
+  return execSyncCommand("cat", ["/etc/machine-id"]) || "123456";
 };
 
 /**
@@ -195,31 +247,22 @@ const getProcessorUsage = () => {
 };
 
 /**
- * Gets the current CPU temperature using `vcgencmd measure_temp`.
+ * Gets the current CPU temperature using `/sys/class/thermal`.
  *
- * @returns {number|null} The CPU temperature in degrees Celsius or null if an error occurs.
+ * @returns {number|null} The CPU temperature in degrees celsius or null if nothing was found.
  */
 const getProcessorTemperature = () => {
-  const output = execSyncCommand("vcgencmd", ["measure_temp"]);
-  if (output !== null) {
-    const temp = output.match(/temp=(\d+\.\d+)/);
-    if (temp && temp[1]) {
-      return parseFloat(temp[1]);
+  const thermal = "/sys/class/thermal";
+  for (const zone of fs.readdirSync(thermal)) {
+    const typeFile = path.join(thermal, zone, "type");
+    const tempFile = path.join(thermal, zone, "temp");
+    if (!fs.existsSync(typeFile) || !fs.existsSync(tempFile)) {
+      continue;
     }
-  }
-  return null;
-};
-
-/**
- * Gets the primary display name using `wlopm`.
- *
- * @returns {string|null} The output of the command or null if an error occurs.
- */
-const getDisplayName = () => {
-  const status = execSyncCommand("wlopm", []);
-  if (status !== null) {
-    const out = status.split("\n")[0].split(" ");
-    return out.shift();
+    const type = fs.readFileSync(typeFile, "utf8").trim();
+    if (["cpu-thermal", "x86_pkg_temp", "k10temp", "acpitz"].includes(type)) {
+      return parseFloat(fs.readFileSync(tempFile, "utf8").trim()) / 1000;
+    }
   }
   return null;
 };
@@ -227,10 +270,9 @@ const getDisplayName = () => {
 /**
  * Gets the current display status path using `/sys/class/drm`.
  *
- * @param {string} name - Primary display name.
  * @returns {string|null} The display status path or null if nothing was found.
  */
-const getDisplayStatusPath = (name) => {
+const getDisplayStatusPath = () => {
   const drm = "/sys/class/drm";
   for (const card of fs.readdirSync(drm)) {
     const statusFile = path.join(drm, card, "status");
@@ -238,7 +280,7 @@ const getDisplayStatusPath = (name) => {
       continue;
     }
     const content = fs.readFileSync(statusFile, "utf8").trim();
-    if (card.includes(name) && content === "connected") {
+    if (content === "connected") {
       return path.join(drm, card);
     }
   }
@@ -246,21 +288,32 @@ const getDisplayStatusPath = (name) => {
 };
 
 /**
- * Gets the current display power status using `wlopm`.
+ * Gets the current display power status using `wlopm` or `xset`.
  *
- * @returns {string|null} The output of the command or null if an error occurs.
+ * @returns {string|null} The display status ON/OFF or null if an error occurs.
  */
 const getDisplayStatus = () => {
-  const status = execSyncCommand("wlopm", []);
-  if (status !== null) {
-    const out = status.split("\n")[0].split(" ");
-    return out.pop().toUpperCase();
+  if (!HARDWARE.support.displayStatus) {
+    return null;
+  }
+  if (session("wayland") && commandExists("wlopm")) {
+    const status = execSyncCommand("wlopm", []);
+    if (status !== null) {
+      const out = status.split("\n")[0].split(" ");
+      return out.pop().toUpperCase();
+    }
+  } else if (session("x11") && commandExists("xset")) {
+    const status = execSyncCommand("xset", ["-q"]);
+    if (status !== null) {
+      const on = /Monitor is On/.test(status);
+      return on ? "ON" : "OFF";
+    }
   }
   return null;
 };
 
 /**
- * Sets the display power status using `wlopm`.
+ * Sets the display power status using `wlopm` or `xset`.
  *
  * This function takes a desired status ('ON' or 'OFF') and executes
  * the appropriate command to set the display status.
@@ -269,32 +322,34 @@ const getDisplayStatus = () => {
  * @param {function} callback - A callback function that receives the output or error.
  */
 const setDisplayStatus = (status, callback = null) => {
+  if (!HARDWARE.support.displayStatus) {
+    return;
+  }
   if (status !== "ON" && status !== "OFF") {
     console.error("Status must be 'ON' or 'OFF'");
     if (typeof callback === "function") callback(null, "Invalid status");
     return;
   }
-  const args = [`--${status.toLowerCase()}`, HARDWARE.display.name];
-  execAsyncCommand("wlopm", args, callback);
+  if (session("wayland") && commandExists("wlopm")) {
+    execAsyncCommand("wlopm", [`--${status.toLowerCase()}`, "*"], callback);
+  } else if (session("x11") && commandExists("xset")) {
+    execAsyncCommand("xset", ["dpms", "force", status.toLowerCase()], callback);
+  }
 };
 
 /**
  * Gets the current display brightness path using `/sys/class/backlight`.
  *
- * @param {string} name - Primary display name.
  * @returns {string|null} The display brightness path or null if nothing was found.
  */
-const getDisplayBrightnessPath = (name) => {
+const getDisplayBrightnessPath = () => {
   const backlight = "/sys/class/backlight";
   for (const address of fs.readdirSync(backlight)) {
-    const nameFile = path.join(backlight, address, "display_name");
-    if (!fs.existsSync(nameFile)) {
+    const brightnessFile = path.join(backlight, address, "brightness");
+    if (!fs.existsSync(brightnessFile)) {
       continue;
     }
-    const content = fs.readFileSync(nameFile, "utf8").trim();
-    if (content.includes(name)) {
-      return path.join(backlight, address);
-    }
+    return path.join(backlight, address);
   }
   return null;
 };
@@ -305,7 +360,7 @@ const getDisplayBrightnessPath = (name) => {
  * @returns {number|null} The brightness maximum value or null if an error occurs.
  */
 const getDisplayBrightnessMax = () => {
-  if (!HARDWARE.display.brightness.path) {
+  if (!HARDWARE.support.displayBrightness) {
     return null;
   }
   const max = execSyncCommand("cat", [`${HARDWARE.display.brightness.path}/max_brightness`]);
@@ -321,7 +376,7 @@ const getDisplayBrightnessMax = () => {
  * @returns {number|null} The brightness level as a percentage or null if an error occurs.
  */
 const getDisplayBrightness = () => {
-  if (!HARDWARE.display.brightness.path) {
+  if (!HARDWARE.support.displayBrightness) {
     return null;
   }
   const brightness = execSyncCommand("cat", [`${HARDWARE.display.brightness.path}/brightness`]);
@@ -342,7 +397,7 @@ const getDisplayBrightness = () => {
  * @param {function} callback - A callback function that receives the output or error.
  */
 const setDisplayBrightness = (brightness, callback = null) => {
-  if (!HARDWARE.display.brightness.path) {
+  if (!HARDWARE.support.displayBrightness) {
     return;
   }
   if (typeof brightness !== "number" || brightness < 1 || brightness > 100) {
@@ -352,7 +407,7 @@ const setDisplayBrightness = (brightness, callback = null) => {
   }
   const max = HARDWARE.display.brightness.max;
   const value = Math.max(1, Math.min(Math.round((brightness / 100) * max), max));
-  const proc = execAsyncCommand("tee", [`${HARDWARE.display.brightness.path}/brightness`], callback);
+  const proc = execAsyncCommand("sudo", ["tee", `${HARDWARE.display.brightness.path}/brightness`], callback);
   proc.stdin.write(value.toString());
   proc.stdin.end();
 };
@@ -379,6 +434,19 @@ const shutdownSystem = (callback = null) => {
  */
 const rebootSystem = (callback = null) => {
   execAsyncCommand("sudo", ["reboot"], callback);
+};
+
+/**
+ * Checks if a command exists using `which`.
+ *
+ * @param {string} cmd - The command name to check.
+ * @returns {boolean} Returns true if the command exists.
+ */
+const commandExists = (cmd) => {
+  try {
+    return !!process.execSync(`which ${cmd}`, { encoding: "utf8" });
+  } catch {}
+  return false;
 };
 
 /**
@@ -440,6 +508,7 @@ module.exports = {
   init,
   update,
   getModel,
+  getVendor,
   getSerialNumber,
   getMachineId,
   getHostName,
@@ -448,7 +517,6 @@ module.exports = {
   getMemoryUsage,
   getProcessorUsage,
   getProcessorTemperature,
-  getDisplayName,
   getDisplayStatusPath,
   getDisplayStatus,
   setDisplayStatus,
