@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,4 +27,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          yarn electron-forge publish --arch arm64
+          yarn electron-forge publish --arch arm64,x64

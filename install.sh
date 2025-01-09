@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
 
+# Determine system architecture
+echo -e "Determining system architecture..."
+
+case "$(uname -m)" in
+    aarch64)
+        ARCH="arm64"
+        ;;
+    x86_64)
+        ARCH="amd64"
+        ;;
+    *)
+        echo "System architecture $(uname -m) not supported."
+        exit 1
+        ;;
+esac
+echo "System architecture $ARCH is supported."
+
 # Download the latest .deb package
-echo -e "Downloading the latest release..."
+echo -e "\nDownloading the latest release..."
 
 DEB_URL=$(wget -qO- https://api.github.com/repos/leukipp/touchkio/releases/latest | \
-grep -o '"browser_download_url": "[^"]*\.deb"' | \
+grep -o "\"browser_download_url\": \"[^\"]*_${ARCH}\.deb\"" | \
 sed 's/"browser_download_url": "//;s/"//g')
 DEB_PATH="/tmp/$(basename "$DEB_URL")"
 
@@ -20,6 +37,11 @@ fi
 
 # Install the latest .deb package
 echo -e "\nInstalling the latest release..."
+
+if ! command -v dpkg &> /dev/null; then
+    echo "Package manager dpkg was not found."
+    exit 1
+fi
 
 if ! sudo dpkg -i "$DEB_PATH"; then
     echo "Installation of .deb file failed."
@@ -48,15 +70,6 @@ EOF"
 
 systemctl --user enable "$(basename "$SERVICE_FILE")" || { echo "Failed to enable service $SERVICE_FILE"; exit 1; }
 echo "Service $SERVICE_FILE enabled"
-
-# Create the udev rule for backlight
-echo -e "\nCreating udev rule for backlight..."
-
-UDEV_FILE="/etc/udev/rules.d/backlight-permissions.rules"
-sudo bash -c "cat << EOF > \"$UDEV_FILE\"
-SUBSYSTEM==\"backlight\", KERNEL==\"10-0045\", RUN+=\"/bin/chmod 666 /sys/class/backlight/%k/bl_power /sys/class/backlight/%k/brightness\"
-EOF"
-echo "Rule $UDEV_FILE created"
 
 # Export display variables
 echo -e "\nExporting display variables..."
