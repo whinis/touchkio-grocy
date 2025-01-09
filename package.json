@@ -1,6 +1,7 @@
 {
     "name": "touchkio",
     "description": "Home Assistant Touch Kiosk",
+    "homepage": "https://github.com/leukipp/touchkio",
     "author": "leukipp",
     "version": "1.0.1",
     "license": "MIT",
@@ -8,46 +9,6 @@
     "scripts": {
         "start": "electron . --web-url=https://demo.home-assistant.io",
         "build": "electron-forge make"
-    },
-    "config": {
-        "forge": {
-            "packagerConfig": {
-                "ignore": [
-                    ".gitignore",
-                    ".github/",
-                    "docs/"
-                ]
-            },
-            "makers": [
-                {
-                    "name": "@electron-forge/maker-zip"
-                },
-                {
-                    "name": "@electron-forge/maker-deb",
-                    "config": {
-                        "options": {
-                            "productName": "TouchKio",
-                            "icon": "img/icon.png",
-                            "categories": [
-                                "Network"
-                            ]
-                        }
-                    }
-                }
-            ],
-            "publishers": [
-                {
-                    "name": "@electron-forge/publisher-github",
-                    "config": {
-                        "repository": {
-                            "owner": "leukipp",
-                            "name": "touchkio"
-                        },
-                        "draft": true
-                    }
-                }
-            ]
-        }
     },
     "prettier": {
         "printWidth": 120

@@ -8,7 +8,7 @@ case "$(uname -m)" in
         ARCH="arm64"
         ;;
     x86_64)
-        ARCH="amd64"
+        ARCH="x64"
         ;;
     *)
         echo "System architecture $(uname -m) not supported."
