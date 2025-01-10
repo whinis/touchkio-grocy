@@ -19,6 +19,10 @@ global.HARDWARE = global.HARDWARE || {
     },
     notifiers: [],
   },
+  keyboard: {
+    visible: null,
+    notifiers: [],
+  },
 };
 
 /**
@@ -68,6 +72,23 @@ const init = async (args) => {
   // Show display infos
   console.log(`\nDisplay Status [${HARDWARE.display.status.path}]:`, getDisplayStatus());
   console.log(`Display Brightness [${HARDWARE.display.brightness.path}]:`, getDisplayBrightness(), "\n");
+
+  // Check for keyboard visibility changes
+  HARDWARE.support.keyboardVisibility = processRuns("squeekboard");
+  setKeyboardVisibility("OFF", (reply, error) => {
+    if (!reply || error) {
+      return;
+    }
+    dbusMonitor("/sm/puri/OSK0", (property, error) => {
+      if (!property || error) {
+        return;
+      }
+      HARDWARE.keyboard.visibility = property.Visible === "true";
+      HARDWARE.keyboard.notifiers.forEach((notifier) => {
+        notifier();
+      });
+    });
+  });
 
   // Check for display changes
   setInterval(update, 500);
@@ -124,9 +145,12 @@ const compatibleDevice = () => {
 /**
  * Queries the session type for the logged in user.
  *
- * @returns {string} Returns session type x11/wayland or null if an error occurs.
+ * @returns {string} Returns session type 'x11'/'wayland' or null if an error occurs.
  */
 const sessionType = () => {
+  if (!commandExists("loginctl")) {
+    return null;
+  }
   return execSyncCommand("loginctl", [
     "show-session",
     "$(loginctl show-user $(whoami) -p Display --value)",
@@ -146,7 +170,7 @@ const session = (type) => {
 /**
  * Gets the model name using `/sys/firmware/devicetree/base/model` or `/sys/class/dmi/id/product_name`.
  *
- * @returns {string|null} The model name of the device or "Generic" if not found.
+ * @returns {string|null} The model name of the device or 'Generic' if not found.
  */
 const getModel = () => {
   const paths = ["/sys/firmware/devicetree/base/model", "/sys/class/dmi/id/product_name"];
@@ -161,7 +185,7 @@ const getModel = () => {
 /**
  * Gets the vendor name using `/sys/class/dmi/id/board_vendor`.
  *
- * @returns {string|null} The vendor name of the device or "Generic" if not found.
+ * @returns {string|null} The vendor name of the device or 'Generic' if not found.
  */
 const getVendor = () => {
   const paths = ["/sys/class/dmi/id/board_vendor"];
@@ -180,7 +204,7 @@ const getVendor = () => {
 /**
  * Gets the serial number using `/sys/firmware/devicetree/base/serial-number` or `/sys/class/dmi/id/product_serial`.
  *
- * @returns {string|null} The serial number of the device or "123456" if not found.
+ * @returns {string|null} The serial number of the device or '123456' if not found.
  */
 const getSerialNumber = () => {
   const paths = ["/sys/firmware/devicetree/base/serial-number", "/sys/class/dmi/id/product_serial"];
@@ -195,7 +219,7 @@ const getSerialNumber = () => {
 /**
  * Gets the host machine id using `/etc/machine-id`.
  *
- * @returns {string} The machine id of the system or "123456" if not found.
+ * @returns {string} The machine id of the system or '123456' if not found.
  */
 const getMachineId = () => {
   return execSyncCommand("cat", ["/etc/machine-id"]) || "123456";
@@ -290,7 +314,7 @@ const getDisplayStatusPath = () => {
 /**
  * Gets the current display power status using `wlopm` or `xset`.
  *
- * @returns {string|null} The display status ON/OFF or null if an error occurs.
+ * @returns {string|null} The display status as 'ON'/'OFF' or null if an error occurs.
  */
 const getDisplayStatus = () => {
   if (!HARDWARE.support.displayStatus) {
@@ -323,6 +347,7 @@ const getDisplayStatus = () => {
  */
 const setDisplayStatus = (status, callback = null) => {
   if (!HARDWARE.support.displayStatus) {
+    if (typeof callback === "function") callback(null, "Not supported");
     return;
   }
   if (status !== "ON" && status !== "OFF") {
@@ -398,6 +423,7 @@ const getDisplayBrightness = () => {
  */
 const setDisplayBrightness = (brightness, callback = null) => {
   if (!HARDWARE.support.displayBrightness) {
+    if (typeof callback === "function") callback(null, "Not supported");
     return;
   }
   if (typeof brightness !== "number" || brightness < 1 || brightness > 100) {
@@ -410,6 +436,52 @@ const setDisplayBrightness = (brightness, callback = null) => {
   const proc = execAsyncCommand("sudo", ["tee", `${HARDWARE.display.brightness.path}/brightness`], callback);
   proc.stdin.write(value.toString());
   proc.stdin.end();
+};
+
+/**
+ * Gets the keyboard visibility using global properties.
+ *
+ * @returns {string|null} The keyboard visibility as 'ON'/'OFF' or null if an error occurs.
+ */
+const getKeyboardVisibility = () => {
+  if (!HARDWARE.support.keyboardVisibility) {
+    return null;
+  }
+  return HARDWARE.keyboard.visibility ? "ON" : "OFF";
+};
+
+/**
+ * Sets the keyboard visibility using `dbus-send`.
+ *
+ * This function takes a desired visibility ('ON' or 'OFF') and executes
+ * the appropriate command to show or hide the keyboard.
+ *
+ * @param {boolean} visibility - The desired visibility ('ON' or 'OFF').
+ * @param {function} callback - A callback function that receives the output or error.
+ */
+const setKeyboardVisibility = (visibility, callback = null) => {
+  if (!HARDWARE.support.keyboardVisibility) {
+    if (typeof callback === "function") callback(null, "Not supported");
+    return;
+  }
+  const visible = visibility === "ON";
+  HARDWARE.keyboard.visibility = visible;
+  dbusCall("/sm/puri/OSK0", "SetVisible", [`boolean:${visible}`], callback);
+};
+
+/**
+ * Checks if system upgrades are available using `apt`.
+ *
+ * @returns {Array<string>} A list of package names that are available for upgrade.
+ */
+const checkPackageUpgrades = () => {
+  if (!commandExists("apt")) {
+    return [];
+  }
+  const output = execSyncCommand("apt", ["list", "--upgradable", "2>/dev/null"]);
+  const packages = (output || "").trim().split("\n");
+  packages.shift();
+  return packages;
 };
 
 /**
@@ -437,14 +509,27 @@ const rebootSystem = (callback = null) => {
 };
 
 /**
- * Checks if a command exists using `which`.
+ * Checks if a process is running using `pidof`.
  *
- * @param {string} cmd - The command name to check.
- * @returns {boolean} Returns true if the command exists.
+ * @param {string} name - The process name to check.
+ * @returns {boolean} Returns true if the process runs.
  */
-const commandExists = (cmd) => {
+const processRuns = (name) => {
   try {
-    return !!process.execSync(`which ${cmd}`, { encoding: "utf8" });
+    return !!process.execSync(`pidof ${name}`, { encoding: "utf8" });
+  } catch {}
+  return false;
+};
+
+/**
+ * Checks if a command is available using `which`.
+ *
+ * @param {string} name - The command name to check.
+ * @returns {boolean} Returns true if the command is available.
+ */
+const commandExists = (name) => {
+  try {
+    return !!process.execSync(`which ${name}`, { encoding: "utf8" });
   } catch {}
   return false;
 };
@@ -499,6 +584,81 @@ const execAsyncCommand = (cmd, args = [], callback = null) => {
       }
     } catch (error) {
       console.error("Execute Async:", error.message);
+      if (typeof callback === "function") {
+        callback(null, error.message);
+      }
+    }
+  });
+  return proc;
+};
+
+/**
+ * Executes a D-Bus method call synchronously using `dbus-send`.
+ *
+ * @param {string} path - The D-Bus object path.
+ * @param {string} method - The D-Bus method name.
+ * @param {Array<string>} values - The argument values for the D-Bus method.
+ * @param {function} callback - A callback function that receives the output or error.
+ */
+const dbusCall = (path, method, values, callback = null) => {
+  const cmd = "dbus-send";
+  const iface = path.slice(1).replace(/\//g, ".");
+  const dest = `${iface} ${path} ${iface}.${method} ${values.join(" ")}`;
+  const args = ["--print-reply", "--type=method_call", `--dest=${dest}`];
+  try {
+    const output = process.execSync([cmd, ...args].join(" "), { encoding: "utf8" });
+    if (typeof callback === "function") {
+      callback(output.trim().replace(/\0/g, ""), null);
+    }
+  } catch (error) {
+    console.error("Call D-Bus:", error.message);
+    if (typeof callback === "function") {
+      callback(null, error.message);
+    }
+  }
+};
+
+/**
+ * Monitors D-Bus property changes asynchronously using `dbus-monitor`.
+ *
+ * @param {string} path - The D-Bus object path.
+ * @param {function} callback - A callback function that receives the changed property.
+ * @returns {object} The spawned process object.
+ */
+const dbusMonitor = (path, callback) => {
+  const cmd = "dbus-monitor";
+  const args = [`interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',path='${path}'`];
+  const proc = process.spawn(cmd, args);
+  proc.stdout.on("data", (data) => {
+    try {
+      const signal = data.toString();
+      if (signal.includes("member=PropertiesChanged") && signal.includes(`path=${path}`)) {
+        const dicts = [...signal.matchAll(/dict entry\(\s*([^)]*?)\)/g)].map((dict) => dict[1].trim());
+        if (dicts.length) {
+          dicts.forEach((dict) => {
+            const key = dict.match(/string "(.*?)"/);
+            const value = dict.match(/(?<=variant\s+)(.*)/);
+            if (key && value && typeof callback === "function") {
+              callback({ [key[1].trim()]: value[1].trim().split(" ").pop() }, null);
+            }
+          });
+        } else {
+          callback({ Visible: `${HARDWARE.keyboard.visibility}` }, null);
+        }
+      }
+    } catch (error) {
+      console.error("Monitor D-Bus:", error.message);
+      if (typeof callback === "function") {
+        callback(null, error.message);
+      }
+    }
+  });
+  proc.stderr.on("data", (data) => {
+    if (data) {
+      console.error("Monitor D-Bus:", data.toString());
+      if (typeof callback === "function") {
+        callback(null, data.toString());
+      }
     }
   });
   return proc;
@@ -524,6 +684,9 @@ module.exports = {
   getDisplayBrightnessMax,
   getDisplayBrightness,
   setDisplayBrightness,
+  getKeyboardVisibility,
+  setKeyboardVisibility,
+  checkPackageUpgrades,
   shutdownSystem,
   rebootSystem,
 };

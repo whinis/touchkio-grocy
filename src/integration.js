@@ -37,15 +37,15 @@ const init = async (args) => {
   INTEGRATION.device = {
     name: `TouchKio ${deviceName}`,
     model: model,
-    serial_number: serialNumber,
     manufacturer: vendor,
+    serial_number: serialNumber,
     identifiers: [INTEGRATION.node],
     sw_version: `${app.getName()}-v${app.getVersion()}`,
   };
 
   // Connection settings
-  const masked = password === null ? "null" : "*".repeat(password.length);
   const options = user === null || password == null ? null : { username: user, password: password };
+  const masked = password === null ? "null" : "*".repeat(password.length);
   console.log("MQTT Connecting:", `${user}:${masked}@${url.toString()}`);
   INTEGRATION.client = mqtt.connect(url.toString(), options);
 
@@ -60,6 +60,7 @@ const init = async (args) => {
       initRefresh(INTEGRATION.client);
       initKiosk(INTEGRATION.client);
       initDisplay(INTEGRATION.client);
+      initKeyboard(INTEGRATION.client);
 
       // Init client sensors
       initModel(INTEGRATION.client);
@@ -70,7 +71,9 @@ const init = async (args) => {
       initMemoryUsage(INTEGRATION.client);
       initProcessorUsage(INTEGRATION.client);
       initProcessorTemperature(INTEGRATION.client);
+      initPackageUpgrades(INTEGRATION.client);
       initHeartbeat(INTEGRATION.client);
+      initLastActive(INTEGRATION.client);
 
       // Integration initialized
       INTEGRATION.initialized = true;
@@ -81,18 +84,29 @@ const init = async (args) => {
       INTEGRATION.status = "offline";
     });
 
-  // Update sensor states on display change
+  // Update sensor states from notifiers
   HARDWARE.display.notifiers.push(() => {
     updateDisplay(INTEGRATION.client);
   });
+  HARDWARE.keyboard.notifiers.push(() => {
+    updateKeyboard(INTEGRATION.client);
+  });
 
-  // Update heartbeat time periodically (30s)
+  // Update time sensors periodically (30s)
   setInterval(() => {
     updateHeartbeat(INTEGRATION.client);
+    updateLastActive(INTEGRATION.client);
   }, 30 * 1000);
 
-  // Update sensor states periodically (1min)
-  setInterval(update, 60 * 1000);
+  // Update system sensors periodically (1min)
+  setInterval(() => {
+    update();
+  }, 60 * 1000);
+
+  // Update package sensors periodically (60min)
+  setInterval(() => {
+    updatePackageUpgrades(INTEGRATION.client);
+  }, 3600 * 1000);
 
   return true;
 };
@@ -108,6 +122,7 @@ const update = () => {
   // Update client sensors
   updateKiosk(INTEGRATION.client);
   updateUpTime(INTEGRATION.client);
+  updateLastActive(INTEGRATION.client);
   updateMemoryUsage(INTEGRATION.client);
   updateProcessorUsage(INTEGRATION.client);
   updateProcessorTemperature(INTEGRATION.client);
@@ -264,6 +279,9 @@ const updateKiosk = (client) => {
  * @param {Object} client - Instance of the mqtt client.
  */
 const initDisplay = (client) => {
+  if (!HARDWARE.support.displayStatus) {
+    return;
+  }
   const root = `${INTEGRATION.discovery}/light/${INTEGRATION.node}/display`;
   const config = {
     name: `Display`,
@@ -311,6 +329,62 @@ const updateDisplay = (client) => {
   }
   if (brightness !== null) {
     client.publish(`${root}/brightness/status`, `${brightness}`, { qos: 1, retain: true });
+  }
+};
+
+/**
+ * Initializes the keyboard visibility and handles the execute logic.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const initKeyboard = (client) => {
+  if (!HARDWARE.support.keyboardVisibility) {
+    return;
+  }
+  const root = `${INTEGRATION.discovery}/switch/${INTEGRATION.node}/keyboard`;
+  const config = {
+    name: `Keyboard`,
+    unique_id: `${INTEGRATION.node}_keyboard`,
+    command_topic: `${root}/set`,
+    state_topic: `${root}/status`,
+    icon: "mdi:keyboard-close",
+    device: INTEGRATION.device,
+  };
+  client
+    .publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true })
+    .on("message", (topic, message) => {
+      if (topic === `${root}/set`) {
+        const status = message.toString();
+        console.log("Set Keyboard Visibility:", status);
+        hardware.setKeyboardVisibility(status);
+        switch (status) {
+          case "OFF":
+            WEBVIEW.window.restore();
+            WEBVIEW.window.unmaximize();
+            WEBVIEW.window.setFullScreen(true);
+            break;
+          case "ON":
+            WEBVIEW.window.restore();
+            WEBVIEW.window.setFullScreen(false);
+            WEBVIEW.window.maximize();
+            break;
+        }
+      }
+    })
+    .subscribe(`${root}/set`);
+  updateKeyboard(client);
+};
+
+/**
+ * Updates the keyboard visibility via the mqtt connection.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const updateKeyboard = (client) => {
+  const visibility = hardware.getKeyboardVisibility();
+  const root = `${INTEGRATION.discovery}/switch/${INTEGRATION.node}/keyboard`;
+  if (visibility !== null) {
+    client.publish(`${root}/status`, `${visibility}`, { qos: 1, retain: true });
   }
 };
 
@@ -576,6 +650,44 @@ const updateProcessorTemperature = (client) => {
 };
 
 /**
+ * Initializes the package upgrades sensor.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const initPackageUpgrades = (client) => {
+  const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/package_upgrades`;
+  const config = {
+    name: `Package Upgrades`,
+    unique_id: `${INTEGRATION.node}_package_upgrades`,
+    state_topic: `${root}/status`,
+    json_attributes_topic: `${root}/attributes`,
+    value_template: "{{ value }}",
+    icon: "mdi:package-down",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
+  updatePackageUpgrades(client);
+};
+
+/**
+ * Updates the package upgrades sensor via the mqtt connection.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const updatePackageUpgrades = (client) => {
+  const packages = hardware.checkPackageUpgrades();
+  const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/package_upgrades`;
+  if (packages !== null) {
+    const attributes = {
+      total: packages.length,
+      packages: packages.map((pkg) => pkg.replace(/\s*\[.*?\]\s*/g, "").trim()),
+    };
+    client.publish(`${root}/status`, `${attributes.total}`, { qos: 1, retain: true });
+    client.publish(`${root}/attributes`, JSON.stringify(attributes), { qos: 1, retain: true });
+  }
+};
+
+/**
  * Initializes the heartbeat sensor.
  *
  * @param {Object} client - Instance of the mqtt client.
@@ -605,6 +717,39 @@ const updateHeartbeat = (client) => {
   const heartbeat = local.toISOString().replace(/\.\d{3}Z$/, "");
   const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/heartbeat`;
   client.publish(`${root}/status`, `${heartbeat}`, { qos: 1, retain: true });
+};
+
+/**
+ * Initializes the last active sensor.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const initLastActive = (client) => {
+  const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/last_active`;
+  const config = {
+    name: `Last Active`,
+    unique_id: `${INTEGRATION.node}_last_active`,
+    state_topic: `${root}/status`,
+    value_template: "{{ (value | float) | round(0) }}",
+    unit_of_measurement: "min",
+    icon: "mdi:gesture-tap-hold",
+    device: INTEGRATION.device,
+  };
+  client.publish(`${root}/config`, JSON.stringify(config), { qos: 1, retain: true });
+  updateLastActive(client);
+};
+
+/**
+ * Updates the last active sensor via the mqtt connection.
+ *
+ * @param {Object} client - Instance of the mqtt client.
+ */
+const updateLastActive = (client) => {
+  const now = new Date();
+  const then = WEBVIEW.pointer.time;
+  const lastActive = Math.abs(now - then) / (1000 * 60);
+  const root = `${INTEGRATION.discovery}/sensor/${INTEGRATION.node}/last_active`;
+  client.publish(`${root}/status`, `${lastActive}`, { qos: 1, retain: true });
 };
 
 module.exports = {

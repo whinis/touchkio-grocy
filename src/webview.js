@@ -1,12 +1,16 @@
 const path = require("path");
 const hardware = require("./hardware");
 const integration = require("./integration");
-const { app, nativeTheme, BaseWindow, WebContentsView } = require("electron");
+const { app, screen, nativeTheme, BaseWindow, WebContentsView } = require("electron");
 
 global.WEBVIEW = global.WEBVIEW || {
   initialized: false,
   status: "offline",
   locked: false,
+  pointer: {
+    position: {},
+    time: new Date(),
+  },
 };
 
 /**
@@ -40,6 +44,7 @@ const init = async (args) => {
 
   // Register events
   windowEvents(WEBVIEW.window, zoom);
+  touchEvents(WEBVIEW.window);
   viewEvents(WEBVIEW.view);
 
   return true;
@@ -86,24 +91,6 @@ const windowEvents = (window, zoom) => {
   window.on("resize", resize);
   resize();
 
-  // Handle focus change for webview lock
-  HARDWARE.display.notifiers.push(() => {
-    WEBVIEW.locked = hardware.getDisplayStatus() === "OFF";
-    if (WEBVIEW.locked) {
-      window.blur();
-    }
-    /* This also works, but it doesn't allow to react for screen wake up.
-    window.setIgnoreMouseEvents(hardware.getDisplayStatus() === "OFF");
-    */
-  });
-  window.on("focus", () => {
-    if (WEBVIEW.locked) {
-      hardware.setDisplayStatus("ON");
-      window.blur();
-    }
-    WEBVIEW.locked = false;
-  });
-
   // Handle window status updates
   window.on("minimize", update);
   window.on("restore", update);
@@ -129,6 +116,46 @@ const windowEvents = (window, zoom) => {
 };
 
 /**
+ * Register touch events and handler.
+ *
+ * @param {Object} window - The root window object.
+ */
+const touchEvents = (window) => {
+  // Handle focus change for webview lock
+  window.on("focus", () => {
+    if (WEBVIEW.locked) {
+      hardware.setDisplayStatus("ON");
+      window.blur();
+    }
+    WEBVIEW.locked = false;
+  });
+  HARDWARE.display.notifiers.push(() => {
+    WEBVIEW.locked = hardware.getDisplayStatus() === "OFF";
+    if (WEBVIEW.locked) {
+      window.blur();
+    }
+  });
+
+  // Handle touch events for activity tracking
+  setInterval(() => {
+    const posOld = WEBVIEW.pointer.position;
+    const posNew = screen.getCursorScreenPoint();
+    if (posOld.x !== posNew.x || posOld.y !== posNew.y) {
+      const now = new Date();
+      const then = WEBVIEW.pointer.time;
+
+      // Update integration sensor
+      WEBVIEW.pointer.time = now;
+      if (Math.abs(now - then) / 1000 > 30) {
+        console.log("Update Last Active");
+        integration.update();
+      }
+    }
+    WEBVIEW.pointer.position = posNew;
+  }, 1 * 1000);
+};
+
+/**
  * Register webview events and handler.
  *
  * @param {Object} view - The main webview object.
@@ -137,8 +164,8 @@ const viewEvents = (view) => {
   // Enable webview touch emulation
   view.webContents.debugger.attach("1.1");
   view.webContents.debugger.sendCommand("Emulation.setEmitTouchEventsForMouse", {
-    enabled: true,
     configuration: "mobile",
+    enabled: true,
   });
 
   // Disable webview hyperlinks
