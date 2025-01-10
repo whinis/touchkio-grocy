@@ -35,11 +35,17 @@ module.exports = {
   hooks: {
     postMake: async (config, results) => {
       for (const result of results) {
+        const artifacts = [];
         result.artifacts.forEach((artifact) => {
           if (artifact.includes("amd64")) {
-            fs.renameSync(artifact, artifact.replace("amd64", "x64"));
+            const renamed = artifact.replace("amd64", "x64");
+            fs.renameSync(artifact, renamed);
+            artifacts.push(renamed);
+          } else {
+            artifacts.push(artifact);
           }
         });
+        result.artifacts = artifacts;
       }
     },
   },
