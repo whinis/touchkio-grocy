@@ -5,7 +5,7 @@ const readline = require("readline/promises");
 const integration = require("./src/integration");
 const hardware = require("./src/hardware");
 const webview = require("./src/webview");
-const { app } = require("electron");
+const { app,protocol,net } = require("electron");
 
 /**
  * This promise resolves when the app has finished initializing,
@@ -85,6 +85,11 @@ const promptArgs = async (proc) => {
       fallback: "http://192.168.1.42:8123",
     },
     {
+      key: "web_url2",
+      question: "\nEnter WEB 2nd url",
+      fallback: "http://192.168.1.42:8123",
+    },
+    {
       key: "web_theme",
       question: "Enter WEB theme",
       fallback: "dark",
@@ -93,6 +98,16 @@ const promptArgs = async (proc) => {
       key: "web_zoom",
       question: "Enter WEB zoom level",
       fallback: "1.25",
+    },
+    {
+      key: "screensaver_time",
+      question: "Enter time before screensaver activates",
+      fallback: "120",
+    },
+    {
+      key: "screensaver_directory",
+      question: "Enter directory where screensaver images are located",
+      fallback: "/home/pi/pictures",
     },
     {
       key: "mqtt",

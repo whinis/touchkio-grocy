@@ -1,0 +1,75 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+      body {
+          background: lightgray;
+          height: 100%;
+      }
+      .screensaverImg {
+          /* The image used */
+          background-image: url("screensaver://image.png");
+          /* Full height */
+          height: 100%;
+          width: 100%;
+          /* Center and scale the image nicely */
+          background-position: center;
+          background-repeat: no-repeat;
+          background-size: cover;
+          z-index: 50;
+          margin: auto;
+          overflow: auto;
+          top: 0;
+          left: 0;
+          position: absolute;
+      }
+      .clock {
+          z-index: 100;
+          width: 550px;
+          height: 100px;
+          margin: auto;
+          font-size: 8em;
+          color: white;
+          /*background-color: white;*/
+          text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+      }
+      html, body, #a {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          width: 100%;
+      }
+
+      #a {
+          z-index: 51;
+          display: table;
+          position: relative;
+      }
+
+      #b {
+          z-index: 51;
+          display: table-cell;
+          margin: 0 0 0 0;
+          padding: 5% 0 0 0;
+          text-align: center;
+          vertical-align: top;
+          position: relative;
+      }
+  </style>
+</head>
+<body>
+<div id="a">
+  <div id="b">
+    <div id = 'clock' class = "clock"> 10:40 am</div>
+  </div>
+</div>
+<div class='screensaverImg' id="screensaverBtn"></div>
+<!--<img class='screensaverImg' id="screensaverBtn" src="../img/default-ss.png"/>-->
+<script src="screensaver.js"></script>
+</body>
+</html>
+
+
+
